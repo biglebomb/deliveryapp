@@ -7,7 +7,14 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: [
+        'favicon.ico',
+        'favicon-96x96.png',
+        'apple-touch-icon.png',
+        'icon.svg',
+        'web-app-manifest-192x192.png',
+        'web-app-manifest-512x512.png'
+      ],
       manifest: {
         name: 'Fresh Milk Delivery',
         short_name: 'Milk Delivery',
@@ -20,10 +27,22 @@ export default defineConfig({
         scope: '/',
         icons: [
           {
-            src: '/icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any maskable'
+            src: '/web-app-manifest-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/web-app-manifest-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/web-app-manifest-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       },
