@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from './composables/useAuth';
 import { useOnline } from './composables/useOnline';
+import { countPendingInbox } from './services/inbox';
 
 const route = useRoute();
 const router = useRouter();
@@ -10,6 +11,16 @@ const auth = useAuth();
 const { online } = useOnline();
 
 const drawer = ref(false);
+const pendingInbox = ref(0);
+
+async function loadPending() {
+  if (!auth.isAdmin.value) return;
+  try {
+    pendingInbox.value = await countPendingInbox();
+  } catch {
+    // ignore — badge is best-effort
+  }
+}
 
 const showNav = computed(() => auth.isAdmin.value && route.name !== 'login');
 const navValue = computed(() => route.path);
@@ -19,6 +30,7 @@ const menuItems = [
   { title: 'Dashboard', value: '/', icon: 'mdi-view-dashboard-outline' },
   { title: 'New order', value: '/orders/new', icon: 'mdi-plus-circle-outline' },
   { title: 'Orders', value: '/orders', icon: 'mdi-clipboard-list-outline' },
+  { title: 'Inbox', value: '/inbox', icon: 'mdi-inbox-outline' },
   { title: 'Deliveries', value: '/deliveries', icon: 'mdi-truck-delivery-outline' },
   { title: 'Customers', value: '/customers', icon: 'mdi-account-group-outline' },
   { title: 'Products', value: '/products', icon: 'mdi-bottle-tonic-outline' },
@@ -37,8 +49,14 @@ const navItems = [
   { title: 'Reports', value: '/reports', icon: 'mdi-chart-bar' }
 ];
 
-onMounted(() => {
-  void auth.init();
+onMounted(async () => {
+  await auth.init();
+  void loadPending();
+});
+
+// Refresh the pending badge whenever the drawer is opened.
+watch(drawer, (open) => {
+  if (open) void loadPending();
 });
 
 function go(path: string) {
@@ -75,7 +93,11 @@ async function signOut() {
           :prepend-icon="item.icon"
           :title="item.title"
           @click="go(item.value)"
-        />
+        >
+          <template v-if="item.value === '/inbox' && pendingInbox > 0" #append>
+            <v-badge :content="pendingInbox" color="error" inline />
+          </template>
+        </v-list-item>
         <v-divider class="my-2" />
         <v-list-item prepend-icon="mdi-logout" title="Sign out" @click="signOut" />
       </v-list>
