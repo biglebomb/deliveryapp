@@ -25,3 +25,10 @@ export async function saveProduct(payload: Partial<Product> & Pick<Product, 'nam
   return data as Product;
 }
 
+export async function deleteProduct(id: string): Promise<void> {
+  // Hard delete is safe for history: order_items keep their name/price snapshots,
+  // and order_items.product_id is ON DELETE SET NULL.
+  const { error } = await requireSupabase().from('products').delete().eq('id', id);
+  if (error) throw error;
+}
+
