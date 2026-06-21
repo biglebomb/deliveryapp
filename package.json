@@ -1,0 +1,28 @@
+{
+  "name": "fresh-milk-delivery",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "vue-tsc -b"
+  },
+  "dependencies": {
+    "@googlemaps/js-api-loader": "^2.1.1",
+    "@mdi/font": "^7.4.47",
+    "@supabase/supabase-js": "^2.76.1",
+    "@types/google.maps": "^3.65.2",
+    "vite-plugin-pwa": "^1.2.0",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3",
+    "vuetify": "^3.10.9"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.12",
+    "vue-tsc": "^3.1.1"
+  }
+}
