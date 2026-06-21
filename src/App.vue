@@ -9,7 +9,7 @@ const router = useRouter();
 const auth = useAuth();
 const { online } = useOnline();
 
-const showNav = computed(() => auth.isAuthenticated.value && route.name !== 'login');
+const showNav = computed(() => auth.isAdmin.value && route.name !== 'login');
 const navValue = computed(() => route.path);
 
 const navItems = [

@@ -14,19 +14,31 @@ export const router = createRouter({
     { path: '/products', name: 'products', component: () => import('../views/ProductsView.vue') },
     { path: '/packaging', name: 'packaging', component: () => import('../views/PackagingView.vue') },
     { path: '/areas', name: 'areas', component: () => import('../views/AreasView.vue') },
-    { path: '/reports', name: 'reports', component: () => import('../views/ReportsView.vue') }
+    { path: '/reports', name: 'reports', component: () => import('../views/ReportsView.vue') },
+    { path: '/drivers', name: 'drivers', component: () => import('../views/DriversView.vue') },
+    { path: '/driver', name: 'driver', component: () => import('../views/DriverView.vue') }
   ],
   scrollBehavior: () => ({ top: 0 })
 });
+
+function homeFor(isAdmin: boolean): string {
+  return isAdmin ? '/' : '/driver';
+}
 
 router.beforeEach(async (to) => {
   const auth = useAuth();
   await auth.init();
 
   if (to.meta.public) {
-    return auth.isAuthenticated.value ? '/' : true;
+    return auth.isAuthenticated.value ? homeFor(auth.isAdmin.value) : true;
   }
 
-  return auth.isAuthenticated.value ? true : '/login';
+  if (!auth.isAuthenticated.value) return '/login';
+
+  // Drivers can only reach their own route; admins use the full app (not the driver view).
+  if (!auth.isAdmin.value && to.name !== 'driver') return '/driver';
+  if (auth.isAdmin.value && to.name === 'driver') return '/';
+
+  return true;
 });
 
