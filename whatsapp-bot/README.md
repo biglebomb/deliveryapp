@@ -4,9 +4,14 @@ Listens to one WhatsApp chat, parses forwarded customer orders (text + a shared 
 pin) with an LLM, and writes them to the app's **review inbox** (`order_inbox` in Supabase).
 The admin then reviews and confirms each order in the web app.
 
-> ⚠️ Uses **Baileys** (unofficial WhatsApp Web). This is against WhatsApp's ToS and carries a
-> small ban risk — fine for a personal test, but plan to move to the official WhatsApp Cloud
-> API if this becomes critical. Only the transport would change; the parser + inbox stay.
+> ⚠️ Uses **whatsapp-web.js** (drives WhatsApp Web in a headless Chromium). This is against
+> WhatsApp's ToS and carries a small ban risk — fine for a personal test, but plan to move to
+> the official WhatsApp Cloud API if this becomes critical.
+>
+> **Resource note:** it runs a headless Chromium, so give the host **~1–2 GB RAM** (a home
+> PC / Raspberry Pi 4+ or an Oracle/GCP always-free VM). Tiny 512 MB hosts will OOM.
+> Because the bot links to *your own* number, messages **you forward** into the Orders chat
+> are processed too (it listens to your own messages, not just incoming ones).
 
 ## How it works
 1. The owner forwards a customer's **order text** and **shares the location** into a dedicated
