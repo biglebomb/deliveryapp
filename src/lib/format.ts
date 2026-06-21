@@ -35,7 +35,13 @@ export function whatsappUrl(phone: string | null | undefined, message?: string):
 export function buildOrderSummary(order: Order): string {
   const customer = order.customer?.name ?? 'Customer';
   const items = (order.order_items ?? [])
-    .map((item) => `${item.quantity}x ${item.product_name_snapshot}`)
+    .map((item) => {
+      const pack =
+        item.packaging_fee_snapshot > 0 && item.packaging_name_snapshot
+          ? ` (${item.packaging_name_snapshot})`
+          : '';
+      return `${item.quantity}x ${item.product_name_snapshot}${pack}`;
+    })
     .join(', ');
 
   return [

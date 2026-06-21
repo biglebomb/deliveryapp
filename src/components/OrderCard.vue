@@ -39,7 +39,10 @@ async function copySummary() {
 
     <div class="mt-3 stack">
       <div v-for="item in order.order_items" :key="item.id" class="d-flex justify-space-between ga-3">
-        <span>{{ item.quantity }}x {{ item.product_name_snapshot }}</span>
+        <span>
+          {{ item.quantity }}x {{ item.product_name_snapshot }}
+          <span v-if="item.packaging_fee_snapshot > 0 && item.packaging_name_snapshot" class="muted">· {{ item.packaging_name_snapshot }}</span>
+        </span>
         <span class="font-weight-medium">{{ formatCurrency(item.subtotal) }}</span>
       </div>
     </div>

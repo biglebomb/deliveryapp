@@ -89,6 +89,9 @@ onMounted(load);
       <v-btn variant="tonal" size="large" prepend-icon="mdi-bottle-tonic" @click="router.push('/products')">
         Products
       </v-btn>
+      <v-btn variant="tonal" size="large" prepend-icon="mdi-package-variant" @click="router.push('/packaging')">
+        Packaging
+      </v-btn>
       <v-btn variant="tonal" size="large" prepend-icon="mdi-vector-polygon" @click="router.push('/areas')">
         Areas
       </v-btn>

@@ -7,15 +7,18 @@ import { assignArea } from '../lib/route';
 import { fetchAreas } from '../services/areas';
 import { fetchCustomers, saveCustomer } from '../services/customers';
 import { createOrder } from '../services/orders';
+import { fetchPackagingOptions } from '../services/packaging';
 import { fetchProducts } from '../services/products';
-import type { Area, Customer, NewOrderItem, OrderStatus, PaymentStatus, Product } from '../types/models';
+import type { Area, Customer, NewOrderItem, OrderStatus, PackagingOption, PaymentStatus, Product } from '../types/models';
 
 const router = useRouter();
 const customers = ref<Customer[]>([]);
 const products = ref<Product[]>([]);
 const areas = ref<Area[]>([]);
+const packagingOptions = ref<PackagingOption[]>([]);
 const selectedCustomerId = ref<string | null>(null);
 const quantities = reactive<Record<string, number>>({});
+const packagingByProduct = reactive<Record<string, string>>({});
 const deliveryNotes = ref('');
 const latitude = ref<number | null>(null);
 const longitude = ref<number | null>(null);
@@ -49,25 +52,47 @@ watch(selectedCustomer, (customer) => {
     longitude.value = customer.longitude;
   }
 });
+const defaultPackaging = computed<PackagingOption | null>(
+  () => packagingOptions.value.find((option) => option.is_default) ?? packagingOptions.value[0] ?? null
+);
+function packagingFor(productId: string): PackagingOption | null {
+  const id = packagingByProduct[productId];
+  return packagingOptions.value.find((option) => option.id === id) ?? defaultPackaging.value;
+}
+
+const packagingItems = computed(() =>
+  packagingOptions.value.map((option) => ({
+    value: option.id,
+    title: option.price > 0 ? `${option.name} (+${formatCurrency(option.price)})` : option.name
+  }))
+);
+
 const selectedItems = computed<NewOrderItem[]>(() =>
   products.value
-    .map((product) => ({ product, quantity: quantities[product.id] ?? 0 }))
+    .map((product) => ({ product, quantity: quantities[product.id] ?? 0, packaging: packagingFor(product.id) }))
     .filter((item) => item.quantity > 0)
 );
-const total = computed(() => selectedItems.value.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0));
+const total = computed(() =>
+  selectedItems.value.reduce(
+    (sum, item) => sum + (Number(item.product.price) + Number(item.packaging?.price ?? 0)) * item.quantity,
+    0
+  )
+);
 
 async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const [customerRows, productRows, areaRows] = await Promise.all([
+    const [customerRows, productRows, areaRows, packagingRows] = await Promise.all([
       fetchCustomers(),
       fetchProducts(false),
-      fetchAreas()
+      fetchAreas(),
+      fetchPackagingOptions(false)
     ]);
     customers.value = customerRows;
     products.value = productRows;
     areas.value = areaRows;
+    packagingOptions.value = packagingRows;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load order form.';
   } finally {
@@ -76,7 +101,11 @@ async function load() {
 }
 
 function changeQty(product: Product, delta: number) {
-  quantities[product.id] = Math.max(0, (quantities[product.id] ?? 0) + delta);
+  const next = Math.max(0, (quantities[product.id] ?? 0) + delta);
+  quantities[product.id] = next;
+  if (next > 0 && !packagingByProduct[product.id] && defaultPackaging.value) {
+    packagingByProduct[product.id] = defaultPackaging.value.id;
+  }
 }
 
 async function addCustomer() {
@@ -172,16 +201,28 @@ onMounted(load);
       <v-card class="list-card pa-4">
         <div class="section-title mb-3">Products</div>
         <div class="stack">
-          <div v-for="product in products" :key="product.id" class="d-flex align-center justify-space-between ga-3">
-            <div>
-              <div class="font-weight-bold">{{ product.name }}</div>
-              <div class="muted text-body-2">{{ formatCurrency(product.price) }}</div>
+          <div v-for="product in products" :key="product.id">
+            <div class="d-flex align-center justify-space-between ga-3">
+              <div>
+                <div class="font-weight-bold">{{ product.name }}</div>
+                <div class="muted text-body-2">{{ formatCurrency(product.price) }}</div>
+              </div>
+              <div class="d-flex align-center ga-2">
+                <v-btn icon="mdi-minus" variant="tonal" size="small" @click="changeQty(product, -1)" />
+                <div class="font-weight-bold text-center" style="min-width: 32px">{{ quantities[product.id] ?? 0 }}</div>
+                <v-btn icon="mdi-plus" color="primary" size="small" @click="changeQty(product, 1)" />
+              </div>
             </div>
-            <div class="d-flex align-center ga-2">
-              <v-btn icon="mdi-minus" variant="tonal" size="small" @click="changeQty(product, -1)" />
-              <div class="font-weight-bold text-center" style="min-width: 32px">{{ quantities[product.id] ?? 0 }}</div>
-              <v-btn icon="mdi-plus" color="primary" size="small" @click="changeQty(product, 1)" />
-            </div>
+            <v-select
+              v-if="(quantities[product.id] ?? 0) > 0 && packagingItems.length > 1"
+              v-model="packagingByProduct[product.id]"
+              :items="packagingItems"
+              label="Packaging"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="mt-2"
+            />
           </div>
         </div>
       </v-card>

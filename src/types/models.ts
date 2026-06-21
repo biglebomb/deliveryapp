@@ -23,6 +23,16 @@ export interface Customer {
   updated_at: string;
 }
 
+export interface PackagingOption {
+  id: string;
+  name: string;
+  price: number;
+  is_active: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface OrderItem {
   id: string;
   order_id: string;
@@ -31,6 +41,9 @@ export interface OrderItem {
   unit_price_snapshot: number;
   quantity: number;
   subtotal: number;
+  packaging_id: string | null;
+  packaging_name_snapshot: string | null;
+  packaging_fee_snapshot: number;
 }
 
 export interface Order {
@@ -53,6 +66,7 @@ export interface Order {
 export interface NewOrderItem {
   product: Product;
   quantity: number;
+  packaging?: PackagingOption | null;
 }
 
 export interface AreaPoint {
