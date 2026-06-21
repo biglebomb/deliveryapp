@@ -1,21 +1,34 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { buildOrderSummary, formatCurrency, formatDateTime, whatsappUrl } from '../lib/format';
-import type { Order, OrderStatus, PaymentStatus } from '../types/models';
-import { orderStatuses, paymentStatuses } from '../types/models';
+import type { Order, OrderStatus, PaymentMethod, PaymentStatus, Profile } from '../types/models';
+import { orderStatuses, paymentMethods, paymentStatuses } from '../types/models';
 
 const props = defineProps<{
   order: Order;
   editable?: boolean;
+  drivers?: Profile[];
 }>();
 
 const emit = defineEmits<{
   status: [id: string, status: OrderStatus];
-  payment: [id: string, status: PaymentStatus];
+  payment: [id: string, status: PaymentStatus, method: PaymentMethod | null];
+  assign: [id: string, driverId: string | null];
 }>();
+
+const methodLabels: Record<PaymentMethod, string> = {
+  cash: 'Cash',
+  qris: 'QRIS',
+  transfer: 'Transfer',
+  other: 'Other'
+};
+const methodItems = paymentMethods.map((value) => ({ value, title: methodLabels[value] }));
 
 const summary = computed(() => buildOrderSummary(props.order));
 const whatsapp = computed(() => whatsappUrl(props.order.customer?.phone, summary.value));
+const driverName = computed(
+  () => props.drivers?.find((d) => d.id === props.order.assigned_driver_id)?.name ?? null
+);
 
 async function copySummary() {
   await navigator.clipboard.writeText(summary.value);
@@ -32,7 +45,7 @@ async function copySummary() {
       <div class="text-right">
         <div class="font-weight-bold">{{ formatCurrency(order.total_amount) }}</div>
         <v-chip size="small" :color="order.payment_status === 'paid' ? 'success' : 'warning'" class="mt-1">
-          {{ order.payment_status }}
+          {{ order.payment_status }}<template v-if="order.payment_method"> · {{ methodLabels[order.payment_method] }}</template>
         </v-chip>
       </div>
     </div>
@@ -47,14 +60,14 @@ async function copySummary() {
       </div>
     </div>
 
-    <div v-if="order.customer?.address || order.delivery_notes" class="mt-3 muted text-body-2">
+    <div v-if="order.customer?.address || order.delivery_notes || driverName" class="mt-3 muted text-body-2">
       <div v-if="order.customer?.address">{{ order.customer.address }}</div>
       <div v-if="order.delivery_notes">{{ order.delivery_notes }}</div>
+      <div v-if="driverName"><v-icon icon="mdi-truck-delivery-outline" size="14" /> {{ driverName }}</div>
     </div>
 
-    <div class="mt-4 grid" :class="{ 'cols-2': editable }">
+    <div v-if="editable" class="mt-4 grid cols-2">
       <v-select
-        v-if="editable"
         :model-value="order.status"
         :items="orderStatuses"
         label="Status"
@@ -62,12 +75,30 @@ async function copySummary() {
         @update:model-value="emit('status', order.id, $event)"
       />
       <v-select
-        v-if="editable"
         :model-value="order.payment_status"
         :items="paymentStatuses"
         label="Payment"
         hide-details
-        @update:model-value="emit('payment', order.id, $event)"
+        @update:model-value="emit('payment', order.id, $event, order.payment_method)"
+      />
+      <v-select
+        :model-value="order.payment_method"
+        :items="methodItems"
+        label="Method"
+        clearable
+        hide-details
+        @update:model-value="emit('payment', order.id, order.payment_status, $event)"
+      />
+      <v-select
+        v-if="drivers"
+        :model-value="order.assigned_driver_id"
+        :items="drivers"
+        item-title="name"
+        item-value="id"
+        label="Driver"
+        clearable
+        hide-details
+        @update:model-value="emit('assign', order.id, $event)"
       />
     </div>
 
@@ -87,4 +118,3 @@ async function copySummary() {
     </div>
   </v-card>
 </template>
-

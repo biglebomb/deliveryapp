@@ -95,6 +95,9 @@ onMounted(load);
       <v-btn variant="tonal" size="large" prepend-icon="mdi-vector-polygon" @click="router.push('/areas')">
         Areas
       </v-btn>
+      <v-btn variant="tonal" size="large" prepend-icon="mdi-account-hard-hat" @click="router.push('/drivers')">
+        Drivers
+      </v-btn>
     </div>
   </main>
 </template>

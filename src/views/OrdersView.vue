@@ -2,10 +2,12 @@
 import { onMounted, ref } from 'vue';
 import EmptyState from '../components/EmptyState.vue';
 import OrderCard from '../components/OrderCard.vue';
-import { fetchOrders, updateOrderStatus, updatePaymentStatus } from '../services/orders';
-import type { Order, OrderStatus, PaymentStatus } from '../types/models';
+import { assignDriver, fetchOrders, updateOrderStatus, updatePayment } from '../services/orders';
+import { fetchDrivers } from '../services/profiles';
+import type { Order, OrderStatus, PaymentMethod, PaymentStatus, Profile } from '../types/models';
 
 const orders = ref<Order[]>([]);
+const drivers = ref<Profile[]>([]);
 const loading = ref(true);
 const error = ref('');
 
@@ -13,7 +15,9 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    orders.value = await fetchOrders();
+    const [orderRows, driverRows] = await Promise.all([fetchOrders(), fetchDrivers()]);
+    orders.value = orderRows;
+    drivers.value = driverRows;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load orders.';
   } finally {
@@ -26,8 +30,13 @@ async function setStatus(id: string, status: OrderStatus) {
   await load();
 }
 
-async function setPayment(id: string, status: PaymentStatus) {
-  await updatePaymentStatus(id, status);
+async function setPayment(id: string, status: PaymentStatus, method: PaymentMethod | null) {
+  await updatePayment(id, status, method);
+  await load();
+}
+
+async function setDriver(id: string, driverId: string | null) {
+  await assignDriver(id, driverId);
   await load();
 }
 
@@ -53,8 +62,10 @@ onMounted(load);
         :key="order.id"
         :order="order"
         editable
+        :drivers="drivers"
         @status="setStatus"
         @payment="setPayment"
+        @assign="setDriver"
       />
     </div>
     <EmptyState v-else-if="!loading" icon="mdi-clipboard-text-outline" title="No orders" text="Create the first order from the quick order screen." />
