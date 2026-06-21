@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { useAuth } from '../composables/useAuth';
 import { formatCurrency } from '../lib/format';
 import { fetchOrders } from '../services/orders';
 import type { Order } from '../types/models';
 
-const router = useRouter();
-const auth = useAuth();
 const orders = ref<Order[]>([]);
 const loading = ref(true);
 const error = ref('');
@@ -34,11 +30,6 @@ async function load() {
   }
 }
 
-async function signOut() {
-  await auth.signOut();
-  await router.push('/login');
-}
-
 onMounted(load);
 </script>
 
@@ -49,10 +40,7 @@ onMounted(load);
         <div class="eyebrow">Today</div>
         <h1 class="title">Milk delivery</h1>
       </div>
-      <div class="d-flex ga-1">
-        <v-btn icon="mdi-refresh" variant="text" :loading="loading" @click="load" />
-        <v-btn icon="mdi-logout" variant="text" @click="signOut" />
-      </div>
+      <v-btn icon="mdi-refresh" variant="text" :loading="loading" @click="load" />
     </div>
 
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
@@ -76,28 +64,5 @@ onMounted(load);
       </v-card>
     </div>
 
-    <div class="grid cols-2">
-      <v-btn color="primary" size="large" prepend-icon="mdi-plus-circle" @click="router.push('/orders/new')">
-        New order
-      </v-btn>
-      <v-btn color="secondary" variant="tonal" size="large" prepend-icon="mdi-truck-delivery" @click="router.push('/deliveries')">
-        Deliveries
-      </v-btn>
-      <v-btn variant="tonal" size="large" prepend-icon="mdi-account-group" @click="router.push('/customers')">
-        Customers
-      </v-btn>
-      <v-btn variant="tonal" size="large" prepend-icon="mdi-bottle-tonic" @click="router.push('/products')">
-        Products
-      </v-btn>
-      <v-btn variant="tonal" size="large" prepend-icon="mdi-package-variant" @click="router.push('/packaging')">
-        Packaging
-      </v-btn>
-      <v-btn variant="tonal" size="large" prepend-icon="mdi-vector-polygon" @click="router.push('/areas')">
-        Areas
-      </v-btn>
-      <v-btn variant="tonal" size="large" prepend-icon="mdi-account-hard-hat" @click="router.push('/drivers')">
-        Drivers
-      </v-btn>
-    </div>
   </main>
 </template>
