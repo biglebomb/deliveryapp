@@ -2,11 +2,11 @@
 import { ref } from 'vue';
 import { parseLatLng } from '../lib/route';
 
+defineProps<{ areaLabel?: string | null; areaUnknown?: boolean }>();
+
 const latitude = defineModel<number | null>('latitude', { default: null });
 const longitude = defineModel<number | null>('longitude', { default: null });
-const area = defineModel<string | null>('area', { default: null });
 
-const areaOptions = ['Area A', 'Area B'];
 const pasteValue = ref('');
 const locating = ref(false);
 const hint = ref('');
@@ -58,9 +58,13 @@ function applyPaste() {
   <div class="stack">
     <div class="d-flex align-center justify-space-between">
       <div class="section-title">Delivery location</div>
-      <v-chip v-if="latitude !== null && longitude !== null" color="success" size="small" variant="tonal">
-        <v-icon icon="mdi-map-marker-check" size="16" start /> Set
-      </v-chip>
+      <div class="d-flex align-center ga-2">
+        <v-chip v-if="areaLabel" color="primary" size="small" variant="tonal">{{ areaLabel }}</v-chip>
+        <v-chip v-else-if="areaUnknown" color="warning" size="small" variant="tonal">Outside zones</v-chip>
+        <v-chip v-if="latitude !== null && longitude !== null" color="success" size="small" variant="tonal">
+          <v-icon icon="mdi-map-marker-check" size="16" start /> Set
+        </v-chip>
+      </div>
     </div>
 
     <v-btn
@@ -89,8 +93,6 @@ function applyPaste() {
       <span>{{ latitude }}, {{ longitude }}</span>
       <v-btn variant="text" size="small" color="error" @click="clearPoint">Clear</v-btn>
     </div>
-
-    <v-select v-model="area" :items="areaOptions" label="Delivery area" clearable hide-details />
 
     <div v-if="hint" class="text-body-2" style="color: rgb(var(--v-theme-error))">{{ hint }}</div>
   </div>

@@ -55,6 +55,34 @@ export function nearestNeighborOrder(start: GeoPoint, stops: RouteStop[]): Route
   return ordered;
 }
 
+/** Ray-casting point-in-polygon test. Polygon is an ordered ring of points. */
+export function pointInPolygon(point: GeoPoint, polygon: GeoPoint[]): boolean {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng;
+    const yi = polygon[i].lat;
+    const xj = polygon[j].lng;
+    const yj = polygon[j].lat;
+    const intersect =
+      yi > point.lat !== yj > point.lat &&
+      point.lng < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/** Name of the first area whose polygon contains the point, or null. */
+export function assignArea(
+  point: GeoPoint,
+  areas: { name: string; polygon: GeoPoint[] }[]
+): string | null {
+  for (const area of areas) {
+    if (pointInPolygon(point, area.polygon)) return area.name;
+  }
+  return null;
+}
+
 /** Total path length in km for an ordered list of stops starting from `start`. */
 export function routeDistanceKm(start: GeoPoint, ordered: GeoPoint[]): number {
   let total = 0;

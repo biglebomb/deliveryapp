@@ -55,6 +55,20 @@ export interface NewOrderItem {
   quantity: number;
 }
 
+export interface AreaPoint {
+  lat: number;
+  lng: number;
+}
+
+export interface Area {
+  id: string;
+  name: string;
+  color: string | null;
+  polygon: AreaPoint[];
+  created_at: string;
+  updated_at: string;
+}
+
 export const orderStatuses: OrderStatus[] = ['pending', 'preparing', 'delivering', 'delivered', 'cancelled'];
 export const paymentStatuses: PaymentStatus[] = ['unpaid', 'paid'];
 
