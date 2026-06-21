@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref, toRefs } from 'vue';
 import EmptyState from '../components/EmptyState.vue';
+import LocationPicker from '../components/LocationPicker.vue';
 import { whatsappUrl } from '../lib/format';
 import { fetchCustomers, saveCustomer } from '../services/customers';
 import type { Customer } from '../types/models';
@@ -9,7 +10,16 @@ const customers = ref<Customer[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
-const form = reactive({ id: '', name: '', phone: '', address: '', notes: '' });
+const form = reactive<{
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  notes: string;
+  latitude: number | null;
+  longitude: number | null;
+}>({ id: '', name: '', phone: '', address: '', notes: '', latitude: null, longitude: null });
+const { latitude: formLat, longitude: formLng } = toRefs(form);
 
 async function load() {
   loading.value = true;
@@ -29,12 +39,14 @@ function edit(customer: Customer) {
     name: customer.name,
     phone: customer.phone ?? '',
     address: customer.address ?? '',
-    notes: customer.notes ?? ''
+    notes: customer.notes ?? '',
+    latitude: customer.latitude,
+    longitude: customer.longitude
   });
 }
 
 function reset() {
-  Object.assign(form, { id: '', name: '', phone: '', address: '', notes: '' });
+  Object.assign(form, { id: '', name: '', phone: '', address: '', notes: '', latitude: null, longitude: null });
 }
 
 async function submit() {
@@ -46,7 +58,9 @@ async function submit() {
       name: form.name,
       phone: form.phone || null,
       address: form.address || null,
-      notes: form.notes || null
+      notes: form.notes || null,
+      latitude: form.latitude,
+      longitude: form.longitude
     });
     reset();
     await load();
@@ -78,6 +92,7 @@ onMounted(load);
         <v-text-field v-model="form.phone" label="Phone" inputmode="tel" />
         <v-textarea v-model="form.address" label="Address" rows="2" />
         <v-textarea v-model="form.notes" label="Notes" rows="2" />
+        <LocationPicker v-model:latitude="formLat" v-model:longitude="formLng" />
         <div class="d-flex ga-2">
           <v-btn color="primary" type="submit" :loading="saving" prepend-icon="mdi-content-save">
             Save

@@ -1,30 +1,54 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import LocationPicker from '../components/LocationPicker.vue';
 import { formatCurrency } from '../lib/format';
+import { assignArea } from '../lib/route';
+import { fetchAreas } from '../services/areas';
 import { fetchCustomers, saveCustomer } from '../services/customers';
 import { createOrder } from '../services/orders';
 import { fetchProducts } from '../services/products';
-import type { Customer, NewOrderItem, OrderStatus, PaymentStatus, Product } from '../types/models';
+import type { Area, Customer, NewOrderItem, OrderStatus, PaymentStatus, Product } from '../types/models';
 
 const router = useRouter();
 const customers = ref<Customer[]>([]);
 const products = ref<Product[]>([]);
+const areas = ref<Area[]>([]);
 const selectedCustomerId = ref<string | null>(null);
 const quantities = reactive<Record<string, number>>({});
 const deliveryNotes = ref('');
 const latitude = ref<number | null>(null);
 const longitude = ref<number | null>(null);
-const deliveryArea = ref<string | null>(null);
 const status = ref<OrderStatus>('pending');
 const paymentStatus = ref<PaymentStatus>('unpaid');
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
-const newCustomer = reactive({ name: '', phone: '', address: '', notes: '' });
+const newCustomer = reactive<{
+  name: string;
+  phone: string;
+  address: string;
+  notes: string;
+  latitude: number | null;
+  longitude: number | null;
+}>({ name: '', phone: '', address: '', notes: '', latitude: null, longitude: null });
+const { latitude: newCustLat, longitude: newCustLng } = toRefs(newCustomer);
 
 const selectedCustomer = computed(() => customers.value.find((customer) => customer.id === selectedCustomerId.value) ?? null);
+
+// Area is derived from the delivery coordinates via the saved polygons.
+const assignedArea = computed(() => {
+  if (latitude.value === null || longitude.value === null) return null;
+  return assignArea({ lat: latitude.value, lng: longitude.value }, areas.value);
+});
+
+// Default the delivery location to the chosen customer's saved location (editable after).
+watch(selectedCustomer, (customer) => {
+  if (customer && customer.latitude !== null && customer.longitude !== null) {
+    latitude.value = customer.latitude;
+    longitude.value = customer.longitude;
+  }
+});
 const selectedItems = computed<NewOrderItem[]>(() =>
   products.value
     .map((product) => ({ product, quantity: quantities[product.id] ?? 0 }))
@@ -36,9 +60,14 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const [customerRows, productRows] = await Promise.all([fetchCustomers(), fetchProducts(false)]);
+    const [customerRows, productRows, areaRows] = await Promise.all([
+      fetchCustomers(),
+      fetchProducts(false),
+      fetchAreas()
+    ]);
     customers.value = customerRows;
     products.value = productRows;
+    areas.value = areaRows;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load order form.';
   } finally {
@@ -56,11 +85,13 @@ async function addCustomer() {
     name: newCustomer.name.trim(),
     phone: newCustomer.phone.trim() || null,
     address: newCustomer.address.trim() || null,
-    notes: newCustomer.notes.trim() || null
+    notes: newCustomer.notes.trim() || null,
+    latitude: newCustomer.latitude,
+    longitude: newCustomer.longitude
   });
   customers.value = [...customers.value, customer].sort((a, b) => a.name.localeCompare(b.name));
   selectedCustomerId.value = customer.id;
-  Object.assign(newCustomer, { name: '', phone: '', address: '', notes: '' });
+  Object.assign(newCustomer, { name: '', phone: '', address: '', notes: '', latitude: null, longitude: null });
 }
 
 async function submit() {
@@ -80,7 +111,7 @@ async function submit() {
       deliveryNotes: deliveryNotes.value.trim() || null,
       latitude: latitude.value,
       longitude: longitude.value,
-      deliveryArea: deliveryArea.value
+      deliveryArea: assignedArea.value
     });
     await router.push('/orders');
   } catch (err) {
@@ -128,6 +159,7 @@ onMounted(load);
                 <v-text-field v-model="newCustomer.phone" label="Phone" inputmode="tel" hide-details />
                 <v-textarea v-model="newCustomer.address" label="Address" rows="2" hide-details />
                 <v-textarea v-model="newCustomer.notes" label="Notes" rows="2" hide-details />
+                <LocationPicker v-model:latitude="newCustLat" v-model:longitude="newCustLng" />
                 <v-btn color="primary" variant="tonal" prepend-icon="mdi-account-plus" @click="addCustomer">
                   Add customer
                 </v-btn>
@@ -163,7 +195,12 @@ onMounted(load);
       </v-card>
 
       <v-card class="list-card pa-4">
-        <LocationPicker v-model:latitude="latitude" v-model:longitude="longitude" v-model:area="deliveryArea" />
+        <LocationPicker
+          v-model:latitude="latitude"
+          v-model:longitude="longitude"
+          :area-label="assignedArea"
+          :area-unknown="latitude !== null && !assignedArea"
+        />
       </v-card>
 
       <v-card class="list-card pa-4 position-sticky" style="bottom: 72px; z-index: 2">
