@@ -1,5 +1,12 @@
 import { requireSupabase } from '../lib/supabase';
-import type { Customer, NewOrderItem, Order, OrderStatus, PaymentStatus } from '../types/models';
+import type {
+  Customer,
+  NewOrderItem,
+  Order,
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus
+} from '../types/models';
 
 const orderSelect = `
   *,
@@ -20,6 +27,17 @@ export async function fetchActiveDeliveries(): Promise<Order[]> {
   const { data, error } = await requireSupabase()
     .from('orders')
     .select(orderSelect)
+    .in('status', ['preparing', 'delivering'])
+    .order('order_date', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Order[];
+}
+
+export async function fetchMyDeliveries(driverId: string): Promise<Order[]> {
+  const { data, error } = await requireSupabase()
+    .from('orders')
+    .select(orderSelect)
+    .eq('assigned_driver_id', driverId)
     .in('status', ['preparing', 'delivering'])
     .order('order_date', { ascending: true });
   if (error) throw error;
@@ -90,6 +108,23 @@ export async function updateOrderStatus(id: string, status: OrderStatus): Promis
 
 export async function updatePaymentStatus(id: string, payment_status: PaymentStatus): Promise<void> {
   const { error } = await requireSupabase().from('orders').update({ payment_status }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function updatePayment(
+  id: string,
+  payment_status: PaymentStatus,
+  payment_method: PaymentMethod | null
+): Promise<void> {
+  const { error } = await requireSupabase()
+    .from('orders')
+    .update({ payment_status, payment_method })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function assignDriver(id: string, assigned_driver_id: string | null): Promise<void> {
+  const { error } = await requireSupabase().from('orders').update({ assigned_driver_id }).eq('id', id);
   if (error) throw error;
 }
 

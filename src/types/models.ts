@@ -1,5 +1,17 @@
 export type OrderStatus = 'pending' | 'preparing' | 'delivering' | 'delivered' | 'cancelled';
 export type PaymentStatus = 'unpaid' | 'paid';
+export type PaymentMethod = 'cash' | 'qris' | 'transfer' | 'other';
+export type UserRole = 'admin' | 'driver';
+
+export interface Profile {
+  id: string;
+  name: string | null;
+  role: UserRole;
+  phone: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Product {
   id: string;
@@ -53,10 +65,12 @@ export interface Order {
   status: OrderStatus;
   total_amount: number;
   payment_status: PaymentStatus;
+  payment_method: PaymentMethod | null;
   delivery_notes: string | null;
   latitude: number | null;
   longitude: number | null;
   delivery_area: string | null;
+  assigned_driver_id: string | null;
   created_at: string;
   updated_at: string;
   customer?: Customer;
@@ -85,4 +99,5 @@ export interface Area {
 
 export const orderStatuses: OrderStatus[] = ['pending', 'preparing', 'delivering', 'delivered', 'cancelled'];
 export const paymentStatuses: PaymentStatus[] = ['unpaid', 'paid'];
+export const paymentMethods: PaymentMethod[] = ['cash', 'qris', 'transfer', 'other'];
 
