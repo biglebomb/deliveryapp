@@ -1,6 +1,10 @@
 import qrcode from 'qrcode-terminal';
-import { Client, LocalAuth, type Message } from 'whatsapp-web.js';
+// whatsapp-web.js is CommonJS — default-import then destructure (named ESM imports fail).
+import pkg from 'whatsapp-web.js';
+import type { Message } from 'whatsapp-web.js';
 import { config } from './config';
+
+const { Client, LocalAuth } = pkg;
 import { parseOrder } from './parser';
 import { supabase } from './supabase';
 
