@@ -46,6 +46,13 @@ function wasSentByUs(body: string): boolean {
   return recentlySent.some((s) => s.body === body.trim());
 }
 
+/** Extract the comparable phone number (62-international digits) from a WhatsApp JID. */
+function senderNumber(jid: string): string {
+  const d = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
+  if (!d) return '';
+  return d.startsWith('0') ? `62${d.slice(1)}` : d;
+}
+
 // Set when the client is ready; we ignore any message older than this so the
 // history WhatsApp replays on initial sync never creates orders.
 let readyAt = 0;
@@ -263,8 +270,9 @@ client.on('disconnected', (reason) => console.log('Disconnected:', reason));
 client.on('ready', () => {
   readyAt = Date.now();
   console.log('✓ WhatsApp connected.');
-  if (config.discover) console.log('DISCOVER mode: send/forward a message in your Orders chat to see its id.');
+  if (config.discover) console.log('DISCOVER mode: send/forward a message in your Orders chat to see its id and number.');
   else if (!config.ordersChatJid) console.log('⚠ ORDERS_CHAT_JID is empty — listening to ALL chats. Run `npm run discover` to find it.');
+  if (config.allowedSenders.length) console.log(`Allowlist active — acting on: ${config.allowedSenders.join(', ')}`);
 });
 
 // `message_create` (not `message`) so we also catch messages YOU send/forward — the bot is
@@ -288,13 +296,17 @@ client.on('message_create', async (msg: Message) => {
 
   if (config.discover) {
     const preview = loc ? '[location]' : text ? JSON.stringify(text).slice(0, 60) : '[other]';
-    console.log(`[discover] chat=${chat} sender=${sender} fromMe=${msg.fromMe} ${preview}`);
+    console.log(`[discover] chat=${chat} sender=${sender} num=${senderNumber(sender)} fromMe=${msg.fromMe} ${preview}`);
     return;
   }
 
   if (config.ordersChatJid && chat !== config.ordersChatJid) return;
-  // Admin control: only the owner's own messages are acted on.
-  if (config.onlyFromMe && !msg.fromMe) return;
+  // Admin control: when an allowlist is set (bot runs on a separate number), only those
+  // numbers are acted on. Otherwise fall back to "only my own messages".
+  const allowed = config.allowedSenders.length
+    ? config.allowedSenders.includes(senderNumber(sender))
+    : !(config.onlyFromMe && !msg.fromMe);
+  if (!allowed) return;
 
   const reply: Reply = async (t) => {
     rememberSent(t);

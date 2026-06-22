@@ -61,11 +61,27 @@ Scan the QR (WhatsApp → Settings → Linked devices). Then send any message in
 the terminal prints `chat=...@g.us` (group) or `...@s.whatsapp.net` (direct). Copy that into
 `ORDERS_CHAT_JID` in `.env`.
 
+## Use a separate WhatsApp number (recommended)
+whatsapp-web.js is unofficial and carries a ban risk, so run the bot on a **throwaway number**,
+not your business line:
+1. Put WhatsApp on the spare number (a second phone, or WhatsApp on a device where you scan the
+   bot QR with that number). The bot links to whatever number scans the QR.
+2. Create your "Orders" chat between your **business number** and the **bot number** (a direct
+   chat, or a small group with both).
+3. Run `npm run discover`, then send a message from your **business number** into that chat. The
+   terminal prints `chat=…` (→ `ORDERS_CHAT_JID`) and `num=…` (→ `ALLOWED_SENDERS`).
+4. Set both in `.env`: `ORDERS_CHAT_JID` = the chat, `ALLOWED_SENDERS` = your business number.
+
+Now you forward/type orders and commands from your business number into the chat, and only the
+bot's spare number is exposed to ban risk. (If you instead run the bot on your own number and
+forward to yourself, leave `ALLOWED_SENDERS` empty and keep `ONLY_FROM_ME=1`.)
+
 ## Run
 ```bash
 npm start
 ```
-First run shows a QR — scan it once. The session is saved in `auth/` and survives restarts.
+First run shows a QR — scan it once **with the bot's number**. The session is saved in `auth/`
+and survives restarts.
 
 ## Keep it always-on (free options)
 - **Home device / Raspberry Pi** — simplest and truly free. Run under `pm2` or a systemd
