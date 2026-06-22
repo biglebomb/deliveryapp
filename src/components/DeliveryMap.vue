@@ -7,6 +7,7 @@ const props = defineProps<{
   stops: RouteStop[];
   start?: GeoPoint | null;
   directions?: google.maps.DirectionsResult | null;
+  maxZoom?: number;
 }>();
 
 const emit = defineEmits<{ select: [id: string] }>();
@@ -80,8 +81,18 @@ function draw() {
 
   if (props.stops.length || props.start) {
     map.fitBounds(bounds, 64);
-    if (props.stops.length + (props.start ? 1 : 0) === 1) {
-      map.setZoom(15);
+    const count = props.stops.length + (props.start ? 1 : 0);
+    const cap = props.maxZoom ?? 16;
+    if (count === 1) {
+      // A single (or very close) destination would otherwise zoom in to street level —
+      // keep some surrounding context so the driver can orient.
+      map.setZoom(cap);
+    } else {
+      // fitBounds resolves the zoom asynchronously; cap it once the map settles, but
+      // leave manual zoom free afterwards.
+      maps.event.addListenerOnce(map, 'idle', () => {
+        if (map && (map.getZoom() ?? 0) > cap) map.setZoom(cap);
+      });
     }
   }
 }
