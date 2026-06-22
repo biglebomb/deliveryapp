@@ -168,7 +168,7 @@ onMounted(load);
       </v-card>
 
       <v-alert v-if="missingCoordsCount" type="info" variant="tonal" density="compact">
-        {{ missingCoordsCount }} order(s) have no location yet — set one on the order to map them.
+        {{ missingCoordsCount }} order(s) have no location yet — open the Orders page and tap "Set location" on each to map them.
       </v-alert>
 
       <div class="grid cols-2">

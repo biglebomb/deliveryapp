@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import LocationPicker from './LocationPicker.vue';
 import { buildOrderSummary, formatCurrency, formatDateTime, whatsappUrl } from '../lib/format';
+import { geocodeAddress } from '../lib/maps';
 import type { Order, OrderStatus, PaymentMethod, PaymentStatus, Profile } from '../types/models';
 import { orderStatuses, paymentMethods, paymentStatuses } from '../types/models';
 
@@ -14,7 +16,53 @@ const emit = defineEmits<{
   status: [id: string, status: OrderStatus];
   payment: [id: string, status: PaymentStatus, method: PaymentMethod | null];
   assign: [id: string, driverId: string | null];
+  location: [id: string, lat: number, lng: number];
 }>();
+
+const showLocation = ref(false);
+const draftLat = ref<number | null>(null);
+const draftLng = ref<number | null>(null);
+const geocoding = ref(false);
+const geoError = ref('');
+
+function openLocation() {
+  draftLat.value = props.order.latitude;
+  draftLng.value = props.order.longitude;
+  geoError.value = '';
+  showLocation.value = true;
+}
+
+async function findFromAddress() {
+  const address = props.order.customer?.address?.trim();
+  if (!address) {
+    geoError.value = 'This customer has no address to search.';
+    return;
+  }
+  geocoding.value = true;
+  geoError.value = '';
+  try {
+    const point = await geocodeAddress(address);
+    if (point) {
+      draftLat.value = point.lat;
+      draftLng.value = point.lng;
+    } else {
+      geoError.value = 'No match found for that address.';
+    }
+  } catch (err) {
+    geoError.value = err instanceof Error ? err.message : 'Geocoding failed (is the Geocoding API enabled?).';
+  } finally {
+    geocoding.value = false;
+  }
+}
+
+function saveLocation() {
+  if (draftLat.value === null || draftLng.value === null) {
+    geoError.value = 'Set a location first.';
+    return;
+  }
+  emit('location', props.order.id, draftLat.value, draftLng.value);
+  showLocation.value = false;
+}
 
 const methodLabels: Record<PaymentMethod, string> = {
   cash: 'Cash',
@@ -102,6 +150,17 @@ async function copySummary() {
       />
     </div>
 
+    <div v-if="editable" class="d-flex align-center justify-space-between mt-3">
+      <span class="muted text-body-2">
+        <v-icon icon="mdi-map-marker" size="14" />
+        <template v-if="order.latitude !== null">{{ order.latitude }}, {{ order.longitude }}</template>
+        <template v-else>No delivery location</template>
+      </span>
+      <v-btn size="small" variant="tonal" prepend-icon="mdi-map-marker-plus" @click="openLocation">
+        {{ order.latitude !== null ? 'Edit' : 'Set' }} location
+      </v-btn>
+    </div>
+
     <div class="d-flex ga-2 mt-4">
       <v-btn
         :disabled="!whatsapp"
@@ -116,5 +175,30 @@ async function copySummary() {
       </v-btn>
       <v-btn variant="text" prepend-icon="mdi-content-copy" @click="copySummary">Copy</v-btn>
     </div>
+
+    <v-dialog v-model="showLocation" max-width="520">
+      <v-card class="pa-4">
+        <div class="section-title mb-2">Delivery location</div>
+        <v-alert v-if="geoError" type="warning" density="compact" class="mb-2">{{ geoError }}</v-alert>
+        <LocationPicker v-model:latitude="draftLat" v-model:longitude="draftLng" />
+        <v-btn
+          v-if="order.customer?.address"
+          :loading="geocoding"
+          variant="text"
+          size="small"
+          prepend-icon="mdi-map-search"
+          class="mt-2"
+          @click="findFromAddress"
+        >
+          Find from address
+        </v-btn>
+        <div class="d-flex ga-2 justify-end mt-4">
+          <v-btn variant="text" @click="showLocation = false">Cancel</v-btn>
+          <v-btn color="primary" :disabled="draftLat === null" prepend-icon="mdi-content-save" @click="saveLocation">
+            Save location
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </v-card>
 </template>

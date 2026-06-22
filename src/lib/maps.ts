@@ -17,9 +17,22 @@ export function loadGoogleMaps(): Promise<typeof google.maps> {
   }
   if (!mapsPromise) {
     setOptions({ key: apiKey, v: 'weekly' });
-    mapsPromise = Promise.all([importLibrary('maps'), importLibrary('routes')]).then(() => google.maps);
+    mapsPromise = Promise.all([
+      importLibrary('maps'),
+      importLibrary('routes'),
+      importLibrary('geocoding')
+    ]).then(() => google.maps);
   }
   return mapsPromise;
+}
+
+/** Geocode a free-text address to coordinates (needs the Geocoding API enabled). */
+export async function geocodeAddress(address: string): Promise<GeoPoint | null> {
+  const maps = await loadGoogleMaps();
+  const geocoder = new maps.Geocoder();
+  const { results } = await geocoder.geocode({ address });
+  const loc = results[0]?.geometry?.location;
+  return loc ? { lat: Number(loc.lat().toFixed(6)), lng: Number(loc.lng().toFixed(6)) } : null;
 }
 
 export interface OptimizedRoute {

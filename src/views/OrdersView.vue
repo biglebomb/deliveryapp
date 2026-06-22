@@ -2,12 +2,15 @@
 import { onMounted, ref } from 'vue';
 import EmptyState from '../components/EmptyState.vue';
 import OrderCard from '../components/OrderCard.vue';
-import { assignDriver, fetchOrders, updateOrderStatus, updatePayment } from '../services/orders';
+import { assignArea } from '../lib/route';
+import { fetchAreas } from '../services/areas';
+import { assignDriver, fetchOrders, updateOrderLocation, updateOrderStatus, updatePayment } from '../services/orders';
 import { fetchDrivers } from '../services/profiles';
-import type { Order, OrderStatus, PaymentMethod, PaymentStatus, Profile } from '../types/models';
+import type { Area, Order, OrderStatus, PaymentMethod, PaymentStatus, Profile } from '../types/models';
 
 const orders = ref<Order[]>([]);
 const drivers = ref<Profile[]>([]);
+const areas = ref<Area[]>([]);
 const loading = ref(true);
 const error = ref('');
 
@@ -15,9 +18,10 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const [orderRows, driverRows] = await Promise.all([fetchOrders(), fetchDrivers()]);
+    const [orderRows, driverRows, areaRows] = await Promise.all([fetchOrders(), fetchDrivers(), fetchAreas()]);
     orders.value = orderRows;
     drivers.value = driverRows;
+    areas.value = areaRows;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load orders.';
   } finally {
@@ -37,6 +41,12 @@ async function setPayment(id: string, status: PaymentStatus, method: PaymentMeth
 
 async function setDriver(id: string, driverId: string | null) {
   await assignDriver(id, driverId);
+  await load();
+}
+
+async function setLocation(id: string, lat: number, lng: number) {
+  const area = assignArea({ lat, lng }, areas.value);
+  await updateOrderLocation(id, lat, lng, area);
   await load();
 }
 
@@ -66,6 +76,7 @@ onMounted(load);
         @status="setStatus"
         @payment="setPayment"
         @assign="setDriver"
+        @location="setLocation"
       />
     </div>
     <EmptyState v-else-if="!loading" icon="mdi-clipboard-text-outline" title="No orders" text="Create the first order from the quick order screen." />
