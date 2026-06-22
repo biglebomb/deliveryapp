@@ -14,11 +14,10 @@ const orderSelect = `
   order_items(*)
 `;
 
-export async function fetchOrders(): Promise<Order[]> {
-  const { data, error } = await requireSupabase()
-    .from('orders')
-    .select(orderSelect)
-    .order('order_date', { ascending: false });
+export async function fetchOrders(includeArchived = false): Promise<Order[]> {
+  let query = requireSupabase().from('orders').select(orderSelect);
+  if (!includeArchived) query = query.is('archived_at', null);
+  const { data, error } = await query.order('order_date', { ascending: false });
   if (error) throw error;
   return (data ?? []) as Order[];
 }
@@ -104,6 +103,18 @@ export async function createOrder(input: {
 export async function updateOrderStatus(id: string, status: OrderStatus): Promise<void> {
   const { error } = await requireSupabase().from('orders').update({ status }).eq('id', id);
   if (error) throw error;
+}
+
+/** Archive every delivered, not-yet-archived order. Returns how many were cleared. */
+export async function archiveDeliveredOrders(): Promise<number> {
+  const { data, error } = await requireSupabase()
+    .from('orders')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('status', 'delivered')
+    .is('archived_at', null)
+    .select('id');
+  if (error) throw error;
+  return data?.length ?? 0;
 }
 
 export async function updatePaymentStatus(id: string, payment_status: PaymentStatus): Promise<void> {

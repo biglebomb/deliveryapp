@@ -71,6 +71,7 @@ export interface Order {
   longitude: number | null;
   delivery_area: string | null;
   assigned_driver_id: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
   customer?: Customer;

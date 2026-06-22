@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { formatCurrency } from '../lib/format';
+import { formatCurrency, formatDateTime } from '../lib/format';
 import { fetchOrders } from '../services/orders';
 import type { Order } from '../types/models';
 
@@ -22,7 +22,12 @@ const paidSales = computed(() =>
   filtered.value.filter((order) => order.payment_status === 'paid').reduce((sum, order) => sum + Number(order.total_amount), 0)
 );
 const unpaidSales = computed(() => totalSales.value - paidSales.value);
-const deliveredCount = computed(() => filtered.value.filter((order) => order.status === 'delivered').length);
+const finishedDeliveries = computed(() =>
+  filtered.value
+    .filter((order) => order.status === 'delivered')
+    .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
+);
+const deliveredCount = computed(() => finishedDeliveries.value.length);
 const productRows = computed(() => {
   const rows = new Map<string, { name: string; quantity: number; subtotal: number }>();
   for (const order of filtered.value) {
@@ -40,7 +45,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    orders.value = await fetchOrders();
+    orders.value = await fetchOrders(true);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load reports.';
   } finally {
@@ -88,6 +93,24 @@ onMounted(load);
         <div class="metric-value">{{ deliveredCount }}</div>
       </v-card>
     </div>
+
+    <v-card class="list-card pa-4 mb-4">
+      <div class="section-title mb-3">Finished deliveries</div>
+      <div v-if="finishedDeliveries.length" class="stack">
+        <div v-for="order in finishedDeliveries" :key="order.id" class="d-flex justify-space-between ga-3">
+          <div>
+            <div class="font-weight-bold">{{ order.customer?.name ?? 'Customer' }}</div>
+            <div class="muted text-body-2">
+              {{ formatDateTime(order.order_date) }}
+              <template v-if="order.delivery_area"> · {{ order.delivery_area }}</template>
+              · {{ order.payment_status }}
+            </div>
+          </div>
+          <div class="font-weight-bold">{{ formatCurrency(order.total_amount) }}</div>
+        </div>
+      </div>
+      <div v-else class="muted">No finished deliveries in this date range.</div>
+    </v-card>
 
     <v-card class="list-card pa-4">
       <div class="section-title mb-3">Product sales</div>

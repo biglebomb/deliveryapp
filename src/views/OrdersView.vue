@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import EmptyState from '../components/EmptyState.vue';
 import OrderCard from '../components/OrderCard.vue';
 import { assignArea } from '../lib/route';
 import { fetchAreas } from '../services/areas';
-import { assignDriver, fetchOrders, updateOrderLocation, updateOrderStatus, updatePayment } from '../services/orders';
+import {
+  archiveDeliveredOrders,
+  assignDriver,
+  fetchOrders,
+  updateOrderLocation,
+  updateOrderStatus,
+  updatePayment
+} from '../services/orders';
 import { fetchDrivers } from '../services/profiles';
 import type { Area, Order, OrderStatus, PaymentMethod, PaymentStatus, Profile } from '../types/models';
 
@@ -13,6 +20,10 @@ const drivers = ref<Profile[]>([]);
 const areas = ref<Area[]>([]);
 const loading = ref(true);
 const error = ref('');
+const confirmClear = ref(false);
+const clearing = ref(false);
+
+const deliveredCount = computed(() => orders.value.filter((o) => o.status === 'delivered').length);
 
 async function load() {
   loading.value = true;
@@ -50,6 +61,20 @@ async function setLocation(id: string, lat: number, lng: number) {
   await load();
 }
 
+async function clearDelivered() {
+  clearing.value = true;
+  error.value = '';
+  try {
+    await archiveDeliveredOrders();
+    confirmClear.value = false;
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not clear delivered orders.';
+  } finally {
+    clearing.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -60,7 +85,18 @@ onMounted(load);
         <div class="eyebrow">All orders</div>
         <h1 class="title">Orders</h1>
       </div>
-      <v-btn color="primary" icon="mdi-plus" to="/orders/new" />
+      <div class="d-flex ga-2">
+        <v-btn
+          v-if="deliveredCount"
+          variant="tonal"
+          color="secondary"
+          prepend-icon="mdi-broom"
+          @click="confirmClear = true"
+        >
+          Clear delivered ({{ deliveredCount }})
+        </v-btn>
+        <v-btn color="primary" icon="mdi-plus" to="/orders/new" />
+      </div>
     </div>
 
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
@@ -80,6 +116,22 @@ onMounted(load);
       />
     </div>
     <EmptyState v-else-if="!loading" icon="mdi-clipboard-text-outline" title="No orders" text="Create the first order from the quick order screen." />
+
+    <v-dialog v-model="confirmClear" max-width="420">
+      <v-card class="pa-4">
+        <div class="section-title mb-2">Clear delivered orders?</div>
+        <div class="muted text-body-2 mb-4">
+          {{ deliveredCount }} delivered order(s) will be cleared from this list. They stay in
+          Reports, so your sales history is kept.
+        </div>
+        <div class="d-flex ga-2 justify-end">
+          <v-btn variant="text" :disabled="clearing" @click="confirmClear = false">Cancel</v-btn>
+          <v-btn color="secondary" :loading="clearing" prepend-icon="mdi-broom" @click="clearDelivered">
+            Clear delivered
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </main>
 </template>
 
