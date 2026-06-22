@@ -131,17 +131,20 @@ const HELP = [
 ].join('\n');
 
 /** Reuse an existing customer with the same name + phone, else insert a new one. */
-async function upsertCustomer(name: string, phone: string | null): Promise<{ id: string; name: string }> {
+async function upsertCustomer(
+  name: string,
+  phone: string | null
+): Promise<{ id: string; name: string; existed: boolean }> {
   if (phone) {
     const { data } = await supabase.from('customers').select('id, name, phone');
     const match = (data ?? []).find(
       (c) => normalizePhone(c.phone) === phone && String(c.name ?? '').trim().toLowerCase() === name.toLowerCase()
     );
-    if (match) return { id: match.id as string, name: match.name as string };
+    if (match) return { id: match.id as string, name: match.name as string, existed: true };
   }
   const { data, error } = await supabase.from('customers').insert({ name, phone }).select('id, name').single();
   if (error) throw error;
-  return { id: data.id as string, name: data.name as string };
+  return { id: data.id as string, name: data.name as string, existed: false };
 }
 
 async function addCustomer(sender: string, arg: string, reply: Reply) {
@@ -168,9 +171,15 @@ async function addCustomer(sender: string, arg: string, reply: Reply) {
   try {
     const customer = await upsertCustomer(name, phone);
     pendingCustomers.set(sender, { id: customer.id, name: customer.name, ts: Date.now(), reply });
-    console.log(`✓ Customer "${name}"${phone ? ` (${phone})` : ''} saved — waiting ${secs}s for a location…`);
+    const label = `"${name}"${phone ? ` (${phone})` : ''}`;
+    if (customer.existed) {
+      console.log(`· Customer ${label} already exists — updating its location. Waiting ${secs}s…`);
+    } else {
+      console.log(`✓ Customer ${label} added — waiting ${secs}s for a location…`);
+    }
+    const status = customer.existed ? 'sudah ada' : 'disimpan';
     await reply(
-      `✓ Pelanggan "${name}"${phone ? ` / ${phone}` : ''} disimpan.\n` +
+      `✓ Pelanggan "${name}"${phone ? ` / ${phone}` : ''} ${status}.\n` +
         `Kirim lokasi sekarang (pin atau link Maps) dalam ${secs}s untuk menyimpan titik antar.`
     );
   } catch (err) {
