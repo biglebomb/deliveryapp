@@ -18,6 +18,10 @@ interface Buffer {
 
 const buffers = new Map<string, Buffer>();
 
+// Set when the client is ready; we ignore any message older than this so the
+// history WhatsApp replays on initial sync never creates orders.
+let readyAt = 0;
+
 async function processOrder(
   sender: string,
   orderText: string,
@@ -59,6 +63,7 @@ client.on('authenticated', () => console.log('Authenticated.'));
 client.on('auth_failure', (m) => console.error('Auth failure:', m));
 client.on('disconnected', (reason) => console.log('Disconnected:', reason));
 client.on('ready', () => {
+  readyAt = Date.now();
   console.log('✓ WhatsApp connected.');
   if (config.discover) console.log('DISCOVER mode: send/forward a message in your Orders chat to see its id.');
   else if (!config.ordersChatJid) console.log('⚠ ORDERS_CHAT_JID is empty — listening to ALL chats. Run `npm run discover` to find it.');
@@ -67,6 +72,9 @@ client.on('ready', () => {
 // `message_create` (not `message`) so we also catch messages YOU send/forward — the bot is
 // linked to your own number, so forwards into the Orders chat are "from me".
 client.on('message_create', async (msg: Message) => {
+  // Only react to messages that arrive after we're ready — skip replayed history.
+  if (readyAt === 0 || msg.timestamp * 1000 < readyAt) return;
+
   const chat = msg.from;
   const sender = msg.author ?? msg.from;
   const isLocation = msg.type === 'location';
