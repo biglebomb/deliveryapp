@@ -25,6 +25,8 @@ const error = ref('');
 const active = ref<InboxItem | null>(null);
 const linkCustomerId = ref<string | null>(null);
 const newCustomer = reactive({ name: '', phone: '' });
+const draftAddress = ref('');
+const draftNotes = ref('');
 const draftItems = ref<{ productId: string | null; quantity: number; packagingId: string | null }[]>([]);
 const draftLat = ref<number | null>(null);
 const draftLng = ref<number | null>(null);
@@ -92,6 +94,8 @@ function review(item: InboxItem) {
   linkCustomerId.value = existing?.id ?? null;
   newCustomer.name = parsedName;
   newCustomer.phone = item.parsed?.phone ?? '';
+  draftAddress.value = item.parsed?.address ?? '';
+  draftNotes.value = item.parsed?.notes ?? '';
   draftLat.value = item.latitude;
   draftLng.value = item.longitude;
   draftItems.value = (item.parsed?.items ?? []).map((pi) => ({
@@ -153,6 +157,7 @@ async function confirm() {
   try {
     const lat = draftLat.value;
     const lng = draftLng.value;
+    const address = draftAddress.value.trim() || null;
 
     let customer: Customer | null = linkCustomerId.value
       ? customers.value.find((c) => c.id === linkCustomerId.value) ?? null
@@ -161,9 +166,13 @@ async function confirm() {
       customer = await saveCustomer({
         name: newCustomer.name.trim() || 'Pelanggan WhatsApp',
         phone: newCustomer.phone.trim() || null,
+        address,
         latitude: lat,
         longitude: lng
       });
+    } else if (address && !customer.address) {
+      // Fill in the address for an existing customer that doesn't have one yet.
+      customer = await saveCustomer({ id: customer.id, name: customer.name, address });
     }
 
     const deliveryArea = draftArea.value;
@@ -173,7 +182,7 @@ async function confirm() {
       items: lineItems,
       status: 'pending',
       paymentStatus: 'unpaid',
-      deliveryNotes: item.parsed?.notes ?? null,
+      deliveryNotes: draftNotes.value.trim() || null,
       latitude: lat,
       longitude: lng,
       deliveryArea
@@ -230,6 +239,12 @@ onMounted(load);
             <v-icon v-if="!it.product_id" icon="mdi-help-circle-outline" size="14" color="warning" />
           </div>
         </div>
+        <div v-if="item.parsed?.address" class="text-body-2 mt-2">
+          <v-icon icon="mdi-map-marker-outline" size="14" /> {{ item.parsed.address }}
+        </div>
+        <div v-if="item.parsed?.notes" class="muted text-body-2 mt-1">
+          <v-icon icon="mdi-note-text-outline" size="14" /> {{ item.parsed.notes }}
+        </div>
         <div v-if="item.raw_text" class="muted text-body-2 mt-2" style="white-space: pre-wrap">"{{ item.raw_text }}"</div>
 
         <div class="d-flex ga-2 mt-4">
@@ -275,10 +290,13 @@ onMounted(load);
           hide-details
           class="mb-2"
         />
-        <div v-if="!linkCustomerId" class="grid cols-2 mb-3">
+        <div v-if="!linkCustomerId" class="grid cols-2 mb-2">
           <v-text-field v-model="newCustomer.name" label="New customer name" hide-details />
           <v-text-field v-model="newCustomer.phone" label="Phone" inputmode="tel" hide-details />
         </div>
+
+        <v-textarea v-model="draftAddress" label="Address" rows="2" auto-grow hide-details class="mb-2" />
+        <v-textarea v-model="draftNotes" label="Delivery notes" rows="1" auto-grow hide-details class="mb-3" />
 
         <div class="section-title text-body-1 mb-1 mt-2">Items</div>
         <div class="stack">

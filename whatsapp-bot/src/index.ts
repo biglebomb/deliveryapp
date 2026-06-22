@@ -9,15 +9,20 @@ import { extractMapsUrl, resolveMapsLink } from './maps-link';
 import { parseOrder } from './parser';
 import { supabase } from './supabase';
 
+type Reply = (text: string) => Promise<void>;
+
 interface Buffer {
   text?: string;
   textTs?: number;
   lat?: number;
   lng?: number;
   locTs?: number;
+  timer?: ReturnType<typeof setTimeout>;
+  reply?: Reply;
 }
 
 const buffers = new Map<string, Buffer>();
+const secs = Math.round(config.pairWindowMs / 1000);
 
 // Set when the client is ready; we ignore any message older than this so the
 // history WhatsApp replays on initial sync never creates orders.
@@ -26,25 +31,46 @@ let readyAt = 0;
 async function processOrder(
   sender: string,
   orderText: string,
-  lat: number,
-  lng: number,
-  reply: (text: string) => Promise<void>
+  lat: number | null,
+  lng: number | null,
+  reply?: Reply,
+  preParsed?: Awaited<ReturnType<typeof parseOrder>>
 ) {
   try {
-    const parsed = await parseOrder(orderText);
+    const parsed = preParsed ?? (await parseOrder(orderText));
     const { error } = await supabase.from('order_inbox').insert({
       raw_text: orderText,
       parsed,
-      latitude: Number(lat.toFixed(6)),
-      longitude: Number(lng.toFixed(6)),
+      latitude: lat !== null ? Number(lat.toFixed(6)) : null,
+      longitude: lng !== null ? Number(lng.toFixed(6)) : null,
       sender,
       status: 'pending'
     });
     if (error) throw error;
-    console.log(`✓ Inbox +1: ${parsed.customer_name ?? 'order'} — ${parsed.items.length} item(s)`);
-    if (config.ackReply) await reply('Pesanan diterima, sedang diproses. 🙏');
+    const where = lat !== null ? 'pin' : 'address only';
+    console.log(`✓ Inbox +1 (${where}): ${parsed.customer_name ?? 'order'} — ${parsed.items.length} item(s)`);
+    if (config.ackReply && reply) await reply('Pesanan diterima, sedang diproses. 🙏');
   } catch (err) {
     console.error('Failed to process order:', err);
+  }
+}
+
+// No location pin arrived within the window. Create the order anyway IF an address was
+// detected in the text; otherwise drop it and log why.
+async function finalizeNoLocation(sender: string) {
+  const buf = buffers.get(sender);
+  if (!buf?.text) return;
+  buffers.delete(sender);
+  try {
+    const parsed = await parseOrder(buf.text);
+    if (parsed.address) {
+      console.log(`· no pin within ${secs}s, but address detected ("${parsed.address}") — creating order…`);
+      await processOrder(sender, buf.text, null, null, buf.reply, parsed);
+    } else {
+      console.log(`✗ Dropped order from ${sender}: no location pin and no address detected after ${secs}s.`);
+    }
+  } catch (err) {
+    console.error('Failed to finalize order without location:', err);
   }
 }
 
@@ -99,6 +125,7 @@ client.on('message_create', async (msg: Message) => {
 
   const now = Date.now();
   const buf = buffers.get(sender) ?? {};
+  buf.reply = (t) => msg.reply(t).then(() => undefined);
   if (text) {
     buf.text = text;
     buf.textTs = now;
@@ -131,15 +158,17 @@ client.on('message_create', async (msg: Message) => {
   const haveLoc = buf.lat !== undefined && buf.lng !== undefined && fresh(buf.locTs);
 
   if (haveText && haveLoc) {
-    const { text: orderText, lat, lng } = buf as Required<Buffer>;
+    if (buf.timer) clearTimeout(buf.timer);
     buffers.delete(sender);
     console.log(`· paired text + location from ${sender} — creating order…`);
-    await processOrder(sender, orderText, lat, lng, (t) => msg.reply(t).then(() => undefined));
+    await processOrder(sender, buf.text as string, buf.lat as number, buf.lng as number, buf.reply);
+  } else if (haveText) {
+    // Have the order text but no pin yet — wait out the window, then create from the
+    // address if one was detected (finalizeNoLocation). Schedule the timer just once.
+    if (!buf.timer) buf.timer = setTimeout(() => void finalizeNoLocation(sender), config.pairWindowMs);
+    console.log(`· got order text from ${sender} — waiting ${secs}s for a location pin…`);
   } else {
-    const got = text ? 'order text' : 'location';
-    const waiting = haveText ? 'a location pin' : 'the order text';
-    const secs = Math.round(config.pairWindowMs / 1000);
-    console.log(`· got ${got} from ${sender} — waiting for ${waiting} (within ${secs}s)`);
+    console.log(`· got location from ${sender} — waiting for the order text (within ${secs}s)`);
   }
 });
 

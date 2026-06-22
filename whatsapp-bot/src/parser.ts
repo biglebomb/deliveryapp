@@ -13,6 +13,7 @@ export interface ParsedItem {
 export interface ParsedOrder {
   customer_name: string | null;
   phone: string | null;
+  address: string | null;
   items: ParsedItem[];
   notes: string | null;
 }
@@ -48,13 +49,14 @@ Available products (format "id = name"):
 ${catalog}
 
 Return ONLY a JSON object, no markdown:
-{"customer_name": string|null, "phone": string|null, "items": [{"name": string, "quantity": number, "product_id": string|null}], "notes": string|null}
+{"customer_name": string|null, "phone": string|null, "address": string|null, "items": [{"name": string, "quantity": number, "product_id": string|null}], "notes": string|null}
 
 Rules:
 - "name" is the item as written by the customer (e.g. "susu ori 1 liter").
 - "product_id" is the best-matching product id from the list above (match Indonesian abbreviations, e.g. "ori" = "Original"), or null if you are unsure.
 - "quantity" is an integer (default 1).
-- "notes" is any delivery instruction, else null.`;
+- "address" is the delivery address / location description, with filler words removed (e.g. from "alamat lengkap diantar ke Blok E2/1" extract "Blok E2/1"; also streets, RT/RW, building/block names). null if none given.
+- "notes" is any OTHER delivery instruction that is not the address (e.g. "titip satpam", "rumah pagar hijau"), else null.`;
 
   const res = await client.chat.completions.create({
     model: config.sumopodModel,
@@ -81,6 +83,7 @@ Rules:
   return {
     customer_name: parsed.customer_name?.trim() || null,
     phone: normalizePhone(parsed.phone),
+    address: parsed.address?.trim() || null,
     items,
     notes: parsed.notes?.trim() || null
   };

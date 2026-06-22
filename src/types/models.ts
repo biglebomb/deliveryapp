@@ -93,6 +93,7 @@ export interface ParsedOrderItem {
 export interface ParsedOrder {
   customer_name: string | null;
   phone: string | null;
+  address: string | null;
   items: ParsedOrderItem[];
   notes: string | null;
 }
