@@ -23,6 +23,23 @@ The admin then reviews and confirms each order in the web app.
 4. You open **Inbox** in the app, review/edit, and **Confirm** → a real customer + order are
    created with the coordinates.
 
+### Shortcuts
+- If the order text matches an **existing customer by name AND phone** who already has a saved
+  location, the order is created immediately — no pin or wait needed.
+- If **no pin** arrives within `PAIR_WINDOW_MS`, the order is still created when an **address**
+  was detected in the text (location left blank for you to set in the Inbox); otherwise it's
+  dropped and logged.
+
+## Commands
+Messages that start with `/` are commands (never treated as orders). Plain text / forwards
+still auto-create orders as above.
+- `/addcustomer <name> <phone>` — saves the customer, then **send a location** (pin or Maps
+  link) within `PAIR_WINDOW_MS` to store their delivery point. Re-adding the same name+phone
+  updates the existing record instead of duplicating. Example:
+  `/addcustomer Fahruddin +62 878-3831-2663`
+- `/cancel` — clear any in-progress order/customer state.
+- `/help` — list commands.
+
 ## Setup
 ```bash
 cd whatsapp-bot
