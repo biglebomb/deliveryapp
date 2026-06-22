@@ -23,7 +23,7 @@ function extractJson(text: string): string {
   return match ? match[0] : '{}';
 }
 
-function normalizePhone(phone: unknown): string | null {
+export function normalizePhone(phone: unknown): string | null {
   if (!phone) return null;
   const digits = String(phone).replace(/\D/g, '');
   if (!digits) return null;

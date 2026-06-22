@@ -6,7 +6,7 @@ import { config } from './config';
 
 const { Client, LocalAuth } = pkg;
 import { extractMapsUrl, resolveMapsLink } from './maps-link';
-import { parseOrder } from './parser';
+import { parseOrder, normalizePhone, type ParsedOrder } from './parser';
 import { supabase } from './supabase';
 
 type Reply = (text: string) => Promise<void>;
@@ -19,6 +19,7 @@ interface Buffer {
   locTs?: number;
   timer?: ReturnType<typeof setTimeout>;
   reply?: Reply;
+  parsed?: ParsedOrder;
 }
 
 const buffers = new Map<string, Buffer>();
@@ -55,6 +56,22 @@ async function processOrder(
   }
 }
 
+// A customer we already know (same name AND same phone) with a saved location — return
+// their coords so we can create the order right away, no pin/timeout needed.
+async function knownCustomerLocation(parsed: ParsedOrder): Promise<{ lat: number; lng: number } | null> {
+  if (!parsed.customer_name || !parsed.phone) return null;
+  const name = parsed.customer_name.trim().toLowerCase();
+  const { data } = await supabase.from('customers').select('name, phone, latitude, longitude');
+  const match = (data ?? []).find(
+    (c) =>
+      c.latitude !== null &&
+      c.longitude !== null &&
+      String(c.name ?? '').trim().toLowerCase() === name &&
+      normalizePhone(c.phone) === parsed.phone
+  );
+  return match ? { lat: Number(match.latitude), lng: Number(match.longitude) } : null;
+}
+
 // No location pin arrived within the window. Create the order anyway IF an address was
 // detected in the text; otherwise drop it and log why.
 async function finalizeNoLocation(sender: string) {
@@ -62,7 +79,7 @@ async function finalizeNoLocation(sender: string) {
   if (!buf?.text) return;
   buffers.delete(sender);
   try {
-    const parsed = await parseOrder(buf.text);
+    const parsed = buf.parsed ?? (await parseOrder(buf.text));
     if (parsed.address) {
       console.log(`· no pin within ${secs}s, but address detected ("${parsed.address}") — creating order…`);
       await processOrder(sender, buf.text, null, null, buf.reply, parsed);
@@ -161,10 +178,22 @@ client.on('message_create', async (msg: Message) => {
     if (buf.timer) clearTimeout(buf.timer);
     buffers.delete(sender);
     console.log(`· paired text + location from ${sender} — creating order…`);
-    await processOrder(sender, buf.text as string, buf.lat as number, buf.lng as number, buf.reply);
+    await processOrder(sender, buf.text as string, buf.lat as number, buf.lng as number, buf.reply, buf.parsed);
   } else if (haveText) {
-    // Have the order text but no pin yet — wait out the window, then create from the
-    // address if one was detected (finalizeNoLocation). Schedule the timer just once.
+    // Parse once (cached) so we can both look up a known customer and reuse it later.
+    if (!buf.parsed) buf.parsed = await parseOrder(buf.text as string);
+
+    // Known customer (same name + phone) with a saved location → create now, skip the wait.
+    const known = await knownCustomerLocation(buf.parsed);
+    if (known) {
+      if (buf.timer) clearTimeout(buf.timer);
+      buffers.delete(sender);
+      console.log(`· known customer "${buf.parsed.customer_name}" — using saved location, no wait.`);
+      await processOrder(sender, buf.text as string, known.lat, known.lng, buf.reply, buf.parsed);
+      return;
+    }
+
+    // Otherwise wait out the window, then create from the address if one was detected.
     if (!buf.timer) buf.timer = setTimeout(() => void finalizeNoLocation(sender), config.pairWindowMs);
     console.log(`· got order text from ${sender} — waiting ${secs}s for a location pin…`);
   } else {
