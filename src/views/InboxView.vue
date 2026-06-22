@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import DeliveryMap from '../components/DeliveryMap.vue';
 import EmptyState from '../components/EmptyState.vue';
+import LocationPicker from '../components/LocationPicker.vue';
 import { formatCurrency, formatDateTime } from '../lib/format';
 import { assignArea } from '../lib/route';
 import { fetchAreas } from '../services/areas';
 import { fetchCustomers, saveCustomer } from '../services/customers';
+import { isMapsLink, resolveMapsLink } from '../services/geo';
 import { fetchInbox, markInbox } from '../services/inbox';
 import { createOrder } from '../services/orders';
 import { fetchPackagingOptions } from '../services/packaging';
 import { fetchProducts } from '../services/products';
 import type { Area, Customer, InboxItem, PackagingOption, Product } from '../types/models';
-import type { RouteStop as Stop } from '../lib/route';
 
 const items = ref<InboxItem[]>([]);
 const products = ref<Product[]>([]);
@@ -26,6 +26,22 @@ const active = ref<InboxItem | null>(null);
 const linkCustomerId = ref<string | null>(null);
 const newCustomer = reactive({ name: '', phone: '' });
 const draftItems = ref<{ productId: string | null; quantity: number; packagingId: string | null }[]>([]);
+const draftLat = ref<number | null>(null);
+const draftLng = ref<number | null>(null);
+const geocoding = ref(false);
+
+/** First Google Maps share link found anywhere in the raw WhatsApp text. */
+const rawMapsLink = computed(() => {
+  const text = active.value?.raw_text ?? '';
+  const match = text.match(/https?:\/\/\S+/g)?.find((url) => isMapsLink(url));
+  return match ?? null;
+});
+
+const draftArea = computed(() =>
+  draftLat.value !== null && draftLng.value !== null
+    ? assignArea({ lat: draftLat.value, lng: draftLng.value }, areas.value)
+    : null
+);
 
 const defaultPackagingId = computed(
   () => (packagingOptions.value.find((p) => p.is_default) ?? packagingOptions.value[0])?.id ?? null
@@ -34,12 +50,6 @@ const productItems = computed(() => products.value.map((p) => ({ value: p.id, ti
 const packagingItems = computed(() =>
   packagingOptions.value.map((p) => ({ value: p.id, title: p.price > 0 ? `${p.name} (+${formatCurrency(p.price)})` : p.name }))
 );
-
-const activeStops = computed<Stop[]>(() => {
-  const a = active.value;
-  if (!a || a.latitude === null || a.longitude === null) return [];
-  return [{ id: a.id, lat: a.latitude, lng: a.longitude, label: a.parsed?.customer_name ?? 'Order' }];
-});
 
 const draftTotal = computed(() =>
   draftItems.value.reduce((sum, d) => {
@@ -82,6 +92,8 @@ function review(item: InboxItem) {
   linkCustomerId.value = existing?.id ?? null;
   newCustomer.name = parsedName;
   newCustomer.phone = item.parsed?.phone ?? '';
+  draftLat.value = item.latitude;
+  draftLng.value = item.longitude;
   draftItems.value = (item.parsed?.items ?? []).map((pi) => ({
     productId: pi.product_id ?? null,
     quantity: pi.quantity || 1,
@@ -95,6 +107,30 @@ function addLine() {
 
 function removeLine(index: number) {
   draftItems.value.splice(index, 1);
+}
+
+/** Resolve coordinates from the Google Maps link found in the raw WhatsApp text. */
+async function findLocation() {
+  const link = rawMapsLink.value;
+  if (!link) {
+    error.value = 'No Maps link found in the message.';
+    return;
+  }
+  geocoding.value = true;
+  error.value = '';
+  try {
+    const point = await resolveMapsLink(link);
+    if (point) {
+      draftLat.value = point.lat;
+      draftLng.value = point.lng;
+    } else {
+      error.value = 'Could not find coordinates for that link.';
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Lookup failed.';
+  } finally {
+    geocoding.value = false;
+  }
 }
 
 async function confirm() {
@@ -115,6 +151,9 @@ async function confirm() {
   saving.value = true;
   error.value = '';
   try {
+    const lat = draftLat.value;
+    const lng = draftLng.value;
+
     let customer: Customer | null = linkCustomerId.value
       ? customers.value.find((c) => c.id === linkCustomerId.value) ?? null
       : null;
@@ -122,15 +161,12 @@ async function confirm() {
       customer = await saveCustomer({
         name: newCustomer.name.trim() || 'Pelanggan WhatsApp',
         phone: newCustomer.phone.trim() || null,
-        latitude: item.latitude,
-        longitude: item.longitude
+        latitude: lat,
+        longitude: lng
       });
     }
 
-    const deliveryArea =
-      item.latitude !== null && item.longitude !== null
-        ? assignArea({ lat: item.latitude, lng: item.longitude }, areas.value)
-        : null;
+    const deliveryArea = draftArea.value;
 
     await createOrder({
       customer,
@@ -138,8 +174,8 @@ async function confirm() {
       status: 'pending',
       paymentStatus: 'unpaid',
       deliveryNotes: item.parsed?.notes ?? null,
-      latitude: item.latitude,
-      longitude: item.longitude,
+      latitude: lat,
+      longitude: lng,
       deliveryArea
     });
 
@@ -209,9 +245,24 @@ onMounted(load);
         <div class="section-title mb-2">Review order</div>
         <v-alert v-if="error" type="error" density="compact" class="mb-3">{{ error }}</v-alert>
 
-        <v-card v-if="activeStops.length" class="list-card mb-3" style="height: 200px; padding: 0">
-          <DeliveryMap :stops="activeStops" />
-        </v-card>
+        <LocationPicker
+          v-model:latitude="draftLat"
+          v-model:longitude="draftLng"
+          :area-label="draftArea"
+          :area-unknown="draftLat !== null && !draftArea"
+        />
+        <v-btn
+          v-if="rawMapsLink"
+          :loading="geocoding"
+          variant="text"
+          size="small"
+          prepend-icon="mdi-map-search"
+          class="mt-1 mb-3"
+          @click="findLocation"
+        >
+          Find from Maps link
+        </v-btn>
+        <div v-else class="mb-3" />
 
         <div class="section-title text-body-1 mb-1">Customer</div>
         <v-autocomplete
