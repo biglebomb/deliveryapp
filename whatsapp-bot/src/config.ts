@@ -15,5 +15,8 @@ export const config = {
   ordersChatJid: process.env.ORDERS_CHAT_JID ?? '',
   pairWindowMs: Number(process.env.PAIR_WINDOW_MS ?? 120000),
   discover: process.env.DISCOVER === '1',
-  ackReply: process.env.ACK_REPLY === '1'
+  ackReply: process.env.ACK_REPLY === '1',
+  // Only process the owner's own messages/forwards (default on) so the admin controls
+  // exactly which messages become orders. Set ONLY_FROM_ME=0 to process anyone in the chat.
+  onlyFromMe: process.env.ONLY_FROM_ME !== '0'
 };

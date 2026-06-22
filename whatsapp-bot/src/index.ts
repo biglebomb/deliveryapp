@@ -73,7 +73,8 @@ client.on('ready', () => {
 // linked to your own number, so forwards into the Orders chat are "from me".
 client.on('message_create', async (msg: Message) => {
   // Only react to messages that arrive after we're ready — skip replayed history.
-  if (readyAt === 0 || msg.timestamp * 1000 < readyAt) return;
+  // 60s grace so clock skew between this machine and WhatsApp doesn't drop a live message.
+  if (readyAt === 0 || msg.timestamp * 1000 < readyAt - 60000) return;
 
   const chat = msg.from;
   const sender = msg.author ?? msg.from;
@@ -91,6 +92,8 @@ client.on('message_create', async (msg: Message) => {
   }
 
   if (config.ordersChatJid && chat !== config.ordersChatJid) return;
+  // Admin control: only the owner's own forwards become orders.
+  if (config.onlyFromMe && !msg.fromMe) return;
   if (!text && !loc) return;
 
   const now = Date.now();
@@ -107,10 +110,19 @@ client.on('message_create', async (msg: Message) => {
   buffers.set(sender, buf);
 
   const fresh = (ts?: number) => ts !== undefined && now - ts <= config.pairWindowMs;
-  if (buf.text && buf.lat !== undefined && buf.lng !== undefined && fresh(buf.textTs) && fresh(buf.locTs)) {
+  const haveText = Boolean(buf.text) && fresh(buf.textTs);
+  const haveLoc = buf.lat !== undefined && buf.lng !== undefined && fresh(buf.locTs);
+
+  if (haveText && haveLoc) {
     const { text: orderText, lat, lng } = buf as Required<Buffer>;
     buffers.delete(sender);
+    console.log(`· paired text + location from ${sender} — creating order…`);
     await processOrder(sender, orderText, lat, lng, (t) => msg.reply(t).then(() => undefined));
+  } else {
+    const got = text ? 'order text' : 'location';
+    const waiting = haveText ? 'a location pin' : 'the order text';
+    const secs = Math.round(config.pairWindowMs / 1000);
+    console.log(`· got ${got} from ${sender} — waiting for ${waiting} (within ${secs}s)`);
   }
 });
 
