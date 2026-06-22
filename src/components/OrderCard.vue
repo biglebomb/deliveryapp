@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import LocationPicker from './LocationPicker.vue';
 import { buildOrderSummary, formatCurrency, formatDateTime, whatsappUrl } from '../lib/format';
 import { geocodeAddress } from '../lib/maps';
+import { isMapsLink, resolveMapsLink } from '../services/geo';
 import type { Order, OrderStatus, PaymentMethod, PaymentStatus, Profile } from '../types/models';
 import { orderStatuses, paymentMethods, paymentStatuses } from '../types/models';
 
@@ -41,15 +42,16 @@ async function findFromAddress() {
   geocoding.value = true;
   geoError.value = '';
   try {
-    const point = await geocodeAddress(address);
+    // The address might be a Google Maps share link (resolve it) or a street address (geocode it).
+    const point = isMapsLink(address) ? await resolveMapsLink(address) : await geocodeAddress(address);
     if (point) {
       draftLat.value = point.lat;
       draftLng.value = point.lng;
     } else {
-      geoError.value = 'No match found for that address.';
+      geoError.value = 'Could not find coordinates for that address/link.';
     }
   } catch (err) {
-    geoError.value = err instanceof Error ? err.message : 'Geocoding failed (is the Geocoding API enabled?).';
+    geoError.value = err instanceof Error ? err.message : 'Lookup failed (is the Geocoding API enabled?).';
   } finally {
     geocoding.value = false;
   }
@@ -77,6 +79,10 @@ const whatsapp = computed(() => whatsappUrl(props.order.customer?.phone, summary
 const driverName = computed(
   () => props.drivers?.find((d) => d.id === props.order.assigned_driver_id)?.name ?? null
 );
+const addressIsLink = computed(() => {
+  const address = props.order.customer?.address;
+  return address ? isMapsLink(address) : false;
+});
 
 async function copySummary() {
   await navigator.clipboard.writeText(summary.value);
@@ -190,7 +196,7 @@ async function copySummary() {
           class="mt-2"
           @click="findFromAddress"
         >
-          Find from address
+          {{ addressIsLink ? 'Find from Maps link' : 'Find from address' }}
         </v-btn>
         <div class="d-flex ga-2 justify-end mt-4">
           <v-btn variant="text" @click="showLocation = false">Cancel</v-btn>

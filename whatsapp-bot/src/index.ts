@@ -5,6 +5,7 @@ import type { Message } from 'whatsapp-web.js';
 import { config } from './config';
 
 const { Client, LocalAuth } = pkg;
+import { extractMapsUrl, resolveMapsLink } from './maps-link';
 import { parseOrder } from './parser';
 import { supabase } from './supabase';
 
@@ -101,6 +102,22 @@ client.on('message_create', async (msg: Message) => {
   if (text) {
     buf.text = text;
     buf.textTs = now;
+    // If the message contains a Google Maps link and we have no pin yet, resolve it to coords.
+    // (A native location pin always takes priority — the loc branch below overrides this.)
+    const mapsUrl = extractMapsUrl(text);
+    if (mapsUrl && buf.lat === undefined) {
+      try {
+        const coords = await resolveMapsLink(mapsUrl);
+        if (coords) {
+          buf.lat = coords.lat;
+          buf.lng = coords.lng;
+          buf.locTs = now;
+          console.log(`· resolved Maps link → ${coords.lat}, ${coords.lng}`);
+        }
+      } catch (err) {
+        console.error('Maps link resolve failed:', err);
+      }
+    }
   }
   if (loc) {
     buf.lat = loc.lat;
