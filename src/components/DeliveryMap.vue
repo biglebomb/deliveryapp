@@ -17,35 +17,67 @@ const error = ref('');
 
 let maps: typeof google.maps | null = null;
 let map: google.maps.Map | null = null;
-let markers: google.maps.Marker[] = [];
+let markerById = new Map<string, google.maps.Marker>();
 let startMarker: google.maps.Marker | null = null;
 let renderer: google.maps.DirectionsRenderer | null = null;
+
+// Viewport-fit tracking. We only refit when stops are added or the start/route
+// changes — never on a pure removal — so completing a delivery leaves the
+// driver's current pan/zoom untouched.
+let hasFit = false;
+let prevStart: GeoPoint | null = null;
+let prevDirections: google.maps.DirectionsResult | null = null;
 
 const JAKARTA: GeoPoint = { lat: -6.2088, lng: 106.8456 };
 
 function clearMarkers() {
-  markers.forEach((m) => m.setMap(null));
-  markers = [];
+  markerById.forEach((m) => m.setMap(null));
+  markerById = new Map();
+}
+
+/** Add/update/remove pins to match props.stops without recreating the whole set. */
+function syncMarkers(): boolean {
+  let added = false;
+  const seen = new Set<string>();
+
+  props.stops.forEach((stop, index) => {
+    seen.add(stop.id);
+    const label = { text: String(index + 1), color: '#ffffff', fontWeight: '700' };
+    const existing = markerById.get(stop.id);
+    if (existing) {
+      existing.setPosition({ lat: stop.lat, lng: stop.lng });
+      existing.setLabel(label);
+      existing.setTitle(stop.label);
+    } else {
+      const marker = new maps!.Marker({
+        map: map!,
+        position: { lat: stop.lat, lng: stop.lng },
+        label,
+        title: stop.label
+      });
+      marker.addListener('click', () => emit('select', stop.id));
+      markerById.set(stop.id, marker);
+      added = true;
+    }
+  });
+
+  for (const [id, marker] of markerById) {
+    if (!seen.has(id)) {
+      marker.setMap(null);
+      markerById.delete(id);
+    }
+  }
+
+  return added;
 }
 
 function draw() {
   if (!map || !maps) return;
 
-  clearMarkers();
-  const bounds = new maps.LatLngBounds();
+  const added = syncMarkers();
 
-  props.stops.forEach((stop, index) => {
-    const marker = new maps!.Marker({
-      map: map!,
-      position: { lat: stop.lat, lng: stop.lng },
-      label: { text: String(index + 1), color: '#ffffff', fontWeight: '700' },
-      title: stop.label
-    });
-    marker.addListener('click', () => emit('select', stop.id));
-    markers.push(marker);
-    bounds.extend({ lat: stop.lat, lng: stop.lng });
-  });
-
+  const startChanged = (props.start ?? null) !== prevStart;
+  prevStart = props.start ?? null;
   if (startMarker) {
     startMarker.setMap(null);
     startMarker = null;
@@ -64,10 +96,11 @@ function draw() {
         strokeWeight: 2
       }
     });
-    bounds.extend({ lat: props.start.lat, lng: props.start.lng });
   }
 
   // Directions polyline (road path) when available.
+  const directionsChanged = (props.directions ?? null) !== prevDirections;
+  prevDirections = props.directions ?? null;
   if (props.directions) {
     if (!renderer) {
       renderer = new maps.DirectionsRenderer({ suppressMarkers: true, preserveViewport: true });
@@ -79,8 +112,16 @@ function draw() {
     renderer = null;
   }
 
-  if (props.stops.length || props.start) {
+  // Only (re)fit on the first paint or when something was added/changed — a pure
+  // removal (a delivered stop) keeps the current view.
+  const shouldFit = !hasFit || added || startChanged || directionsChanged;
+  if (shouldFit && (props.stops.length || props.start)) {
+    const bounds = new maps.LatLngBounds();
+    props.stops.forEach((stop) => bounds.extend({ lat: stop.lat, lng: stop.lng }));
+    if (props.start) bounds.extend({ lat: props.start.lat, lng: props.start.lng });
+
     map.fitBounds(bounds, 64);
+    hasFit = true;
     const count = props.stops.length + (props.start ? 1 : 0);
     const cap = props.maxZoom ?? 16;
     if (count === 1) {
