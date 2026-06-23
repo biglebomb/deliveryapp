@@ -15,21 +15,28 @@ const error = ref('');
 const pendingInbox = ref(0);
 const generatedNotice = ref('');
 
-const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' });
+const today = todayKey.format(new Date());
 
-const todayOrders = computed(() =>
-  orders.value.filter(
-    (o) =>
-      new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date(o.order_date)) === todayKey &&
-      o.status !== 'cancelled'
-  )
+function isToday(timestamp: string | null): boolean {
+  return timestamp !== null && todayKey.format(new Date(timestamp)) === today;
+}
+
+// Orders delivered today — revenue is recognized on the delivery day, not when
+// the order was created.
+const deliveredToday = computed(() => orders.value.filter((o) => isToday(o.delivered_at)));
+const todaySales = computed(() => deliveredToday.value.reduce((s, o) => s + Number(o.total_amount), 0));
+
+// The active queue: orders still to be delivered, regardless of when created.
+const toDeliver = computed(() =>
+  orders.value.filter((o) => ['pending', 'preparing', 'delivering'].includes(o.status))
 );
 
-const todaySales = computed(() => todayOrders.value.reduce((s, o) => s + Number(o.total_amount), 0));
-
-const todayDelivered = computed(() =>
-  todayOrders.value.filter((o) => o.status === 'delivered').length
-);
+// Dashboard list = today's operational picture: still-to-deliver plus delivered today.
+const todayOrders = computed(() => {
+  const rank = (o: Order) => (o.status === 'delivered' ? 1 : 0);
+  return [...toDeliver.value, ...deliveredToday.value].sort((a, b) => rank(a) - rank(b));
+});
 
 const unpaidTotal = computed(() =>
   orders.value.filter((o) => o.payment_status === 'unpaid').reduce((s, o) => s + Number(o.total_amount), 0)
@@ -56,6 +63,7 @@ function itemsSummary(order: Order): string {
 async function markDelivered(order: Order) {
   await updateOrderStatus(order.id, 'delivered');
   order.status = 'delivered';
+  order.delivered_at = new Date().toISOString();
 }
 
 async function load() {
@@ -105,16 +113,16 @@ onMounted(load);
     <!-- Stat cards -->
     <div class="metric-grid mb-4">
       <v-card class="metric">
-        <div class="muted text-body-2">Today's orders</div>
-        <div class="metric-value">{{ todayOrders.length }}</div>
-      </v-card>
-      <v-card class="metric">
-        <div class="muted text-body-2">Today's sales</div>
-        <div class="metric-value">{{ formatCurrency(todaySales) }}</div>
+        <div class="muted text-body-2">To deliver</div>
+        <div class="metric-value">{{ toDeliver.length }}</div>
       </v-card>
       <v-card class="metric">
         <div class="muted text-body-2">Delivered today</div>
-        <div class="metric-value">{{ todayDelivered }}</div>
+        <div class="metric-value">{{ deliveredToday.length }}</div>
+      </v-card>
+      <v-card class="metric">
+        <div class="muted text-body-2">Sales today</div>
+        <div class="metric-value">{{ formatCurrency(todaySales) }}</div>
       </v-card>
       <v-card class="metric">
         <div class="muted text-body-2">Unpaid total</div>
@@ -164,11 +172,11 @@ onMounted(load);
       <v-icon icon="mdi-chevron-right" />
     </v-card>
 
-    <!-- Today's order list -->
-    <div class="section-title mb-2">Today's orders</div>
+    <!-- Today's order list: still to deliver + delivered today -->
+    <div class="section-title mb-2">Today's deliveries</div>
     <v-card class="list-card">
       <div v-if="loading" class="pa-6 text-center muted">Loading…</div>
-      <div v-else-if="todayOrders.length === 0" class="pa-6 text-center muted">No orders for today yet.</div>
+      <div v-else-if="todayOrders.length === 0" class="pa-6 text-center muted">Nothing to deliver and nothing delivered yet today.</div>
       <div v-else>
         <div
           v-for="(order, i) in todayOrders"
