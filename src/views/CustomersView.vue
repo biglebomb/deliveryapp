@@ -1,25 +1,32 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, toRefs } from 'vue';
-import EmptyState from '../components/EmptyState.vue';
+import { computed, onMounted, reactive, ref, toRefs } from 'vue';
+import { useDisplay } from 'vuetify';
 import LocationPicker from '../components/LocationPicker.vue';
 import { whatsappUrl } from '../lib/format';
 import { fetchCustomers, saveCustomer } from '../services/customers';
 import type { Customer } from '../types/models';
 
+const { mobile } = useDisplay();
 const customers = ref<Customer[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
+const dialog = ref(false);
 const form = reactive<{
-  id: string;
-  name: string;
-  phone: string;
-  address: string;
-  notes: string;
-  latitude: number | null;
-  longitude: number | null;
+  id: string; name: string; phone: string; address: string; notes: string;
+  latitude: number | null; longitude: number | null;
 }>({ id: '', name: '', phone: '', address: '', notes: '', latitude: null, longitude: null });
 const { latitude: formLat, longitude: formLng } = toRefs(form);
+
+const isEditing = computed(() => !!form.id);
+
+const headers = [
+  { title: 'Name', key: 'name' },
+  { title: 'Phone', key: 'phone' },
+  { title: 'Address', key: 'address' },
+  { title: 'Location', key: 'location', sortable: false, width: '100px' },
+  { title: '', key: 'actions', sortable: false, width: '80px' }
+];
 
 async function load() {
   loading.value = true;
@@ -33,7 +40,12 @@ async function load() {
   }
 }
 
-function edit(customer: Customer) {
+function openAdd() {
+  Object.assign(form, { id: '', name: '', phone: '', address: '', notes: '', latitude: null, longitude: null });
+  dialog.value = true;
+}
+
+function openEdit(customer: Customer) {
   Object.assign(form, {
     id: customer.id,
     name: customer.name,
@@ -43,10 +55,7 @@ function edit(customer: Customer) {
     latitude: customer.latitude,
     longitude: customer.longitude
   });
-}
-
-function reset() {
-  Object.assign(form, { id: '', name: '', phone: '', address: '', notes: '', latitude: null, longitude: null });
+  dialog.value = true;
 }
 
 async function submit() {
@@ -62,7 +71,7 @@ async function submit() {
       latitude: form.latitude,
       longitude: form.longitude
     });
-    reset();
+    dialog.value = false;
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not save customer.';
@@ -81,54 +90,83 @@ onMounted(load);
         <div class="eyebrow">Address book</div>
         <h1 class="title">Customers</h1>
       </div>
-      <v-btn icon="mdi-refresh" variant="text" :loading="loading" @click="load" />
+      <div class="d-flex ga-2">
+        <v-btn icon="mdi-refresh" variant="text" :loading="loading" @click="load" />
+        <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openAdd">Add</v-btn>
+      </div>
     </div>
 
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
 
-    <v-card class="list-card pa-4 mb-4">
-      <form class="stack" @submit.prevent="submit">
-        <v-text-field v-model="form.name" label="Name" required />
-        <v-text-field v-model="form.phone" label="Phone" inputmode="tel" />
-        <v-textarea v-model="form.address" label="Address" rows="2" />
-        <v-textarea v-model="form.notes" label="Notes" rows="2" />
-        <LocationPicker v-model:latitude="formLat" v-model:longitude="formLng" />
-        <div class="d-flex ga-2">
-          <v-btn color="primary" type="submit" :loading="saving" prepend-icon="mdi-content-save">
-            Save
-          </v-btn>
-          <v-btn variant="text" @click="reset">Clear</v-btn>
-        </div>
-      </form>
+    <v-card class="list-card">
+      <v-data-table
+        :headers="headers"
+        :items="customers"
+        :loading="loading"
+        density="comfortable"
+        hover
+        item-value="id"
+      >
+        <template #item.phone="{ item }">
+          <span class="muted">{{ item.phone || '—' }}</span>
+        </template>
+
+        <template #item.address="{ item }">
+          <span class="text-body-2" style="max-width: 220px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+            {{ item.address || '—' }}
+          </span>
+        </template>
+
+        <template #item.location="{ item }">
+          <v-chip v-if="item.latitude !== null" size="x-small" color="success" variant="tonal">
+            <v-icon icon="mdi-map-marker" size="12" start /> pinned
+          </v-chip>
+          <v-chip v-else size="x-small" variant="tonal">no pin</v-chip>
+        </template>
+
+        <template #item.actions="{ item }">
+          <div class="d-flex ga-1">
+            <v-btn
+              v-if="whatsappUrl(item.phone)"
+              :href="whatsappUrl(item.phone) || undefined"
+              target="_blank"
+              rel="noopener"
+              icon="mdi-whatsapp"
+              size="x-small"
+              variant="text"
+              color="success"
+            />
+            <v-btn icon="mdi-pencil" size="x-small" variant="text" @click="openEdit(item)" />
+          </div>
+        </template>
+
+        <template #no-data>
+          <div class="pa-6 text-center muted">No customers yet. Add one to speed up order entry.</div>
+        </template>
+      </v-data-table>
     </v-card>
 
-    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
-    <div v-if="customers.length" class="stack">
-      <v-card v-for="customer in customers" :key="customer.id" class="list-card pa-4">
-        <div class="d-flex align-start justify-space-between ga-3">
-          <div>
-            <div class="section-title">{{ customer.name }}</div>
-            <div class="muted text-body-2">{{ customer.phone || 'No phone' }}</div>
-            <div class="mt-2">{{ customer.address }}</div>
-            <div v-if="customer.notes" class="muted text-body-2 mt-1">{{ customer.notes }}</div>
-          </div>
-          <v-btn icon="mdi-pencil" variant="text" @click="edit(customer)" />
-        </div>
-        <v-btn
-          class="mt-3"
-          :disabled="!whatsappUrl(customer.phone)"
-          :href="whatsappUrl(customer.phone) || undefined"
-          target="_blank"
-          rel="noopener"
-          variant="tonal"
-          color="primary"
-          prepend-icon="mdi-whatsapp"
-        >
-          WhatsApp
-        </v-btn>
+    <!-- Add / Edit dialog -->
+    <v-dialog v-model="dialog" :fullscreen="mobile" max-width="560" scrollable>
+      <v-card>
+        <v-toolbar density="compact" color="surface">
+          <v-btn icon="mdi-close" variant="text" @click="dialog = false" />
+          <v-toolbar-title class="text-body-1 font-weight-bold">
+            {{ isEditing ? 'Edit customer' : 'Add customer' }}
+          </v-toolbar-title>
+          <template #append>
+            <v-btn color="primary" variant="tonal" :loading="saving" @click="submit">Save</v-btn>
+          </template>
+        </v-toolbar>
+        <v-card-text class="pa-4 stack">
+          <v-alert v-if="error" type="error" density="compact">{{ error }}</v-alert>
+          <v-text-field v-model="form.name" label="Name" required hide-details />
+          <v-text-field v-model="form.phone" label="Phone" inputmode="tel" hide-details />
+          <v-textarea v-model="form.address" label="Address" rows="2" hide-details />
+          <v-textarea v-model="form.notes" label="Notes" rows="2" hide-details />
+          <LocationPicker v-model:latitude="formLat" v-model:longitude="formLng" />
+        </v-card-text>
       </v-card>
-    </div>
-    <EmptyState v-else-if="!loading" icon="mdi-account-group-outline" title="No customers" text="Add a customer to speed up order entry." />
+    </v-dialog>
   </main>
 </template>
-

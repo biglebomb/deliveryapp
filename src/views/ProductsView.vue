@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
-import EmptyState from '../components/EmptyState.vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { formatCurrency } from '../lib/format';
 import { deleteProduct, fetchProducts, saveProduct } from '../services/products';
 import type { Product } from '../types/models';
@@ -8,10 +7,21 @@ import type { Product } from '../types/models';
 const products = ref<Product[]>([]);
 const loading = ref(true);
 const saving = ref(false);
-const error = ref('');
-const form = reactive({ id: '', name: '', description: '', price: 0, is_active: true });
-const productToDelete = ref<Product | null>(null);
 const deleting = ref(false);
+const error = ref('');
+const dialog = ref(false);
+const toDelete = ref<Product | null>(null);
+const form = reactive({ id: '', name: '', description: '', price: 0, is_active: true });
+
+const isEditing = computed(() => !!form.id);
+
+const headers = [
+  { title: 'Name', key: 'name' },
+  { title: 'Price', key: 'price', align: 'end' as const, width: '120px' },
+  { title: 'Status', key: 'is_active', width: '100px' },
+  { title: 'Description', key: 'description' },
+  { title: '', key: 'actions', sortable: false, width: '80px' }
+];
 
 async function load() {
   loading.value = true;
@@ -25,7 +35,12 @@ async function load() {
   }
 }
 
-function edit(product: Product) {
+function openAdd() {
+  Object.assign(form, { id: '', name: '', description: '', price: 0, is_active: true });
+  dialog.value = true;
+}
+
+function openEdit(product: Product) {
   Object.assign(form, {
     id: product.id,
     name: product.name,
@@ -33,26 +48,7 @@ function edit(product: Product) {
     price: Number(product.price),
     is_active: product.is_active
   });
-}
-
-function reset() {
-  Object.assign(form, { id: '', name: '', description: '', price: 0, is_active: true });
-}
-
-async function confirmDelete() {
-  if (!productToDelete.value) return;
-  deleting.value = true;
-  error.value = '';
-  try {
-    await deleteProduct(productToDelete.value.id);
-    if (form.id === productToDelete.value.id) reset();
-    productToDelete.value = null;
-    await load();
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Could not delete product.';
-  } finally {
-    deleting.value = false;
-  }
+  dialog.value = true;
 }
 
 async function submit() {
@@ -66,12 +62,27 @@ async function submit() {
       price: Number(form.price),
       is_active: form.is_active
     });
-    reset();
+    dialog.value = false;
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not save product.';
   } finally {
     saving.value = false;
+  }
+}
+
+async function confirmDelete() {
+  if (!toDelete.value) return;
+  deleting.value = true;
+  error.value = '';
+  try {
+    await deleteProduct(toDelete.value.id);
+    toDelete.value = null;
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not delete product.';
+  } finally {
+    deleting.value = false;
   }
 }
 
@@ -85,58 +96,88 @@ onMounted(load);
         <div class="eyebrow">Catalog</div>
         <h1 class="title">Products</h1>
       </div>
-      <v-btn icon="mdi-refresh" variant="text" :loading="loading" @click="load" />
+      <div class="d-flex ga-2">
+        <v-btn icon="mdi-refresh" variant="text" :loading="loading" @click="load" />
+        <v-btn color="primary" prepend-icon="mdi-plus" @click="openAdd">Add</v-btn>
+      </div>
     </div>
 
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
 
-    <v-card class="list-card pa-4 mb-4">
-      <form class="stack" @submit.prevent="submit">
-        <v-text-field v-model="form.name" label="Product name" required />
-        <v-textarea v-model="form.description" label="Description" rows="2" />
-        <v-text-field v-model.number="form.price" label="Price" type="number" min="0" inputmode="numeric" required />
-        <v-switch v-model="form.is_active" color="primary" label="Active" hide-details />
-        <div class="d-flex ga-2">
-          <v-btn color="primary" type="submit" :loading="saving" prepend-icon="mdi-content-save">
-            Save
-          </v-btn>
-          <v-btn variant="text" @click="reset">Clear</v-btn>
-        </div>
-      </form>
+    <v-card class="list-card">
+      <v-data-table
+        :headers="headers"
+        :items="products"
+        :loading="loading"
+        density="comfortable"
+        hover
+        item-value="id"
+      >
+        <template #item.price="{ item }">
+          <span class="font-weight-bold">{{ formatCurrency(item.price) }}</span>
+        </template>
+
+        <template #item.is_active="{ item }">
+          <v-chip size="x-small" :color="item.is_active ? 'success' : 'default'" variant="tonal">
+            {{ item.is_active ? 'Active' : 'Inactive' }}
+          </v-chip>
+        </template>
+
+        <template #item.description="{ item }">
+          <span class="muted text-body-2">{{ item.description || '—' }}</span>
+        </template>
+
+        <template #item.actions="{ item }">
+          <div class="d-flex ga-1">
+            <v-btn icon="mdi-pencil" size="x-small" variant="text" @click="openEdit(item)" />
+            <v-btn icon="mdi-delete-outline" size="x-small" variant="text" color="error" @click="toDelete = item" />
+          </div>
+        </template>
+
+        <template #no-data>
+          <div class="pa-6 text-center muted">No products yet. Add products before creating orders.</div>
+        </template>
+      </v-data-table>
     </v-card>
 
-    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
-    <div v-if="products.length" class="stack">
-      <v-card v-for="product in products" :key="product.id" class="list-card pa-4">
-        <div class="d-flex align-start justify-space-between ga-3">
-          <div>
-            <div class="section-title">{{ product.name }}</div>
-            <div class="font-weight-bold mt-1">{{ formatCurrency(product.price) }}</div>
-            <div v-if="product.description" class="muted text-body-2 mt-1">{{ product.description }}</div>
-            <v-chip size="small" class="mt-2" :color="product.is_active ? 'success' : 'default'">
-              {{ product.is_active ? 'active' : 'inactive' }}
-            </v-chip>
-          </div>
-          <div class="d-flex">
-            <v-btn icon="mdi-pencil" variant="text" @click="edit(product)" />
-            <v-btn icon="mdi-delete-outline" variant="text" color="error" @click="productToDelete = product" />
-          </div>
+    <!-- Add / Edit dialog -->
+    <v-dialog v-model="dialog" max-width="480">
+      <v-card class="pa-4">
+        <div class="section-title mb-4">{{ isEditing ? 'Edit product' : 'Add product' }}</div>
+        <div class="stack">
+          <v-alert v-if="error" type="error" density="compact">{{ error }}</v-alert>
+          <v-text-field v-model="form.name" label="Product name" required hide-details />
+          <v-textarea v-model="form.description" label="Description" rows="2" hide-details />
+          <v-text-field
+            v-model.number="form.price"
+            label="Price"
+            type="number"
+            min="0"
+            inputmode="numeric"
+            prefix="Rp"
+            required
+            hide-details
+          />
+          <v-switch v-model="form.is_active" color="primary" label="Active" hide-details />
+        </div>
+        <div class="d-flex ga-2 justify-end mt-4">
+          <v-btn variant="text" :disabled="saving" @click="dialog = false">Cancel</v-btn>
+          <v-btn color="primary" :loading="saving" prepend-icon="mdi-content-save" @click="submit">Save</v-btn>
         </div>
       </v-card>
-    </div>
-    <EmptyState v-else-if="!loading" icon="mdi-bottle-tonic-outline" title="No products" text="Add products before creating orders." />
+    </v-dialog>
 
-    <v-dialog :model-value="productToDelete !== null" max-width="420" @update:model-value="productToDelete = null">
+    <!-- Delete confirm -->
+    <v-dialog :model-value="toDelete !== null" max-width="420" @update:model-value="toDelete = null">
       <v-card class="pa-4">
         <div class="section-title mb-2">Delete product?</div>
-        <p class="mb-1">Remove <strong>{{ productToDelete?.name }}</strong> from the catalog.</p>
-        <p class="muted text-body-2 mb-4">Past orders keep their saved name and price — only the catalog entry is removed.</p>
+        <p class="mb-1">Remove <strong>{{ toDelete?.name }}</strong> from the catalog.</p>
+        <p class="muted text-body-2 mb-4">Past orders keep their saved name and price.</p>
         <div class="d-flex ga-2 justify-end">
-          <v-btn variant="text" :disabled="deleting" @click="productToDelete = null">Cancel</v-btn>
+          <v-btn variant="text" :disabled="deleting" @click="toDelete = null">Cancel</v-btn>
           <v-btn color="error" :loading="deleting" prepend-icon="mdi-delete" @click="confirmDelete">Delete</v-btn>
         </div>
       </v-card>
     </v-dialog>
   </main>
 </template>
-
