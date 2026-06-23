@@ -133,45 +133,55 @@ const HELP = [
 /** Reuse an existing customer with the same name + phone, else insert a new one. */
 async function upsertCustomer(
   name: string,
-  phone: string | null
+  phone: string | null,
+  address: string | null = null
 ): Promise<{ id: string; name: string; existed: boolean }> {
   if (phone) {
     const { data } = await supabase.from('customers').select('id, name, phone');
     const match = (data ?? []).find(
       (c) => normalizePhone(c.phone) === phone && String(c.name ?? '').trim().toLowerCase() === name.toLowerCase()
     );
-    if (match) return { id: match.id as string, name: match.name as string, existed: true };
+    if (match) {
+      if (address) await supabase.from('customers').update({ address }).eq('id', match.id as string);
+      return { id: match.id as string, name: match.name as string, existed: true };
+    }
   }
-  const { data, error } = await supabase.from('customers').insert({ name, phone }).select('id, name').single();
+  const { data, error } = await supabase.from('customers').insert({ name, phone, address }).select('id, name').single();
   if (error) throw error;
   return { id: data.id as string, name: data.name as string, existed: false };
 }
 
 async function addCustomer(sender: string, arg: string, reply: Reply) {
   if (!arg) {
-    await reply('Format: /addcustomer <nama> <nomor>\nContoh: /addcustomer Fahruddin +62 878-3831-2663');
+    await reply('Format: /addcustomer <nama> <nomor> [alamat]\nContoh: /addcustomer Fahruddin +62 878-3831-2663 Blok E2/1');
     return;
   }
   let name = arg;
   let phoneRaw: string | null = null;
+  let addressRaw: string | null = null;
   if (arg.includes('|')) {
-    const [n, p] = arg.split('|');
-    name = n.trim();
-    phoneRaw = p?.trim() ?? null;
+    const parts = arg.split('|').map((s) => s.trim());
+    name = parts[0] || '';
+    phoneRaw = parts[1] || null;
+    addressRaw = parts[2] || null;
   } else {
     const m = arg.match(/(\+?\d[\d\s().-]{5,}\d)/);
     if (m) {
+      const phoneIdx = arg.indexOf(m[1]);
+      name = arg.slice(0, phoneIdx).trim();
       phoneRaw = m[1];
-      name = arg.replace(m[1], '').trim();
+      addressRaw = arg.slice(phoneIdx + m[1].length).replace(/^[,;\s]+/, '').trim() || null;
     }
   }
   name = name.replace(/[,;]+$/, '').trim() || 'Pelanggan';
   const phone = normalizePhone(phoneRaw);
+  const address = addressRaw?.trim() || null;
 
   try {
-    const customer = await upsertCustomer(name, phone);
+    const customer = await upsertCustomer(name, phone, address);
     pendingCustomers.set(sender, { id: customer.id, name: customer.name, ts: Date.now(), reply });
-    const label = `"${name}"${phone ? ` (${phone})` : ''}`;
+    const addrNote = address ? ` addr="${address}"` : '';
+    const label = `"${name}"${phone ? ` (${phone})` : ''}${addrNote}`;
     if (customer.existed) {
       console.log(`· Customer ${label} already exists — updating its location. Waiting ${secs}s…`);
     } else {
@@ -318,8 +328,7 @@ client.on('message_create', async (msg: Message) => {
   if (!allowed) return;
 
   const reply: Reply = async (t) => {
-    rememberSent(t);
-    await msg.reply(t);
+    console.log(`[reply suppressed] ${t.replace(/\n/g, ' | ').slice(0, 120)}`);
   };
 
   // Slash commands are never treated as orders.
