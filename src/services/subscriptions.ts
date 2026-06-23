@@ -140,6 +140,7 @@ export async function generateTodaysSubscriptionOrders(): Promise<number> {
         total_amount: totalAmount,
         payment_status: 'paid',
         payment_method: 'transfer',
+        paid_at: new Date().toISOString(),
         delivery_notes: sub.delivery_notes,
         latitude: lat,
         longitude: lng,

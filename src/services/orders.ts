@@ -66,6 +66,7 @@ export async function createOrder(input: {
       status: input.status,
       total_amount: totalAmount,
       payment_status: input.paymentStatus,
+      paid_at: input.paymentStatus === 'paid' ? new Date().toISOString() : null,
       delivery_notes: input.deliveryNotes,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
@@ -101,7 +102,10 @@ export async function createOrder(input: {
 }
 
 export async function updateOrderStatus(id: string, status: OrderStatus): Promise<void> {
-  const { error } = await requireSupabase().from('orders').update({ status }).eq('id', id);
+  // Stamp the delivery moment so reports/dashboard can attribute revenue to the
+  // day it was actually delivered; clear it if the order moves back out of delivered.
+  const delivered_at = status === 'delivered' ? new Date().toISOString() : null;
+  const { error } = await requireSupabase().from('orders').update({ status, delivered_at }).eq('id', id);
   if (error) throw error;
 }
 
@@ -118,7 +122,8 @@ export async function archiveDeliveredOrders(): Promise<number> {
 }
 
 export async function updatePaymentStatus(id: string, payment_status: PaymentStatus): Promise<void> {
-  const { error } = await requireSupabase().from('orders').update({ payment_status }).eq('id', id);
+  const paid_at = payment_status === 'paid' ? new Date().toISOString() : null;
+  const { error } = await requireSupabase().from('orders').update({ payment_status, paid_at }).eq('id', id);
   if (error) throw error;
 }
 
@@ -127,9 +132,10 @@ export async function updatePayment(
   payment_status: PaymentStatus,
   payment_method: PaymentMethod | null
 ): Promise<void> {
+  const paid_at = payment_status === 'paid' ? new Date().toISOString() : null;
   const { error } = await requireSupabase()
     .from('orders')
-    .update({ payment_status, payment_method })
+    .update({ payment_status, payment_method, paid_at })
     .eq('id', id);
   if (error) throw error;
 }
@@ -193,7 +199,7 @@ export async function updateOrder(
 export async function reopenOrder(id: string): Promise<void> {
   const { error } = await requireSupabase()
     .from('orders')
-    .update({ archived_at: null, status: 'pending' })
+    .update({ archived_at: null, status: 'pending', delivered_at: null })
     .eq('id', id);
   if (error) throw error;
 }
