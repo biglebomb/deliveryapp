@@ -104,12 +104,27 @@ async function load() {
   }
 }
 
+async function currentPosition(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { timeout: 6000, maximumAge: 30000 }
+    );
+  });
+}
+
 async function optimize() {
   const stops = withCoords.value;
   if (stops.length < 2) return;
-  const origin = stops[0];
   optimizing.value = true;
   notice.value = '';
+
+  const gps = await currentPosition();
+  const origin = gps ?? stops[0];
+  if (!gps) notice.value = 'Lokasi saat ini tidak tersedia — mulai dari stop pertama.';
+
   try {
     if (isMapsConfigured) {
       const result = await optimizeRoute(origin, stops);
@@ -235,6 +250,19 @@ onMounted(load);
                 <v-chip size="x-small" :color="ordersById.get(stop.id)?.payment_status === 'paid' ? 'success' : 'warning'" class="mt-1">
                   {{ ordersById.get(stop.id)?.payment_status }}
                 </v-chip>
+              </div>
+            </div>
+
+            <div v-if="ordersById.get(stop.id)?.order_items?.length" class="mt-3 stack">
+              <div v-for="item in ordersById.get(stop.id)!.order_items" :key="item.id" class="d-flex justify-space-between text-body-2">
+                <span>
+                  {{ item.quantity }}× {{ item.product_name_snapshot }}
+                  <span v-if="item.packaging_name_snapshot && item.packaging_fee_snapshot > 0" class="muted"> · {{ item.packaging_name_snapshot }}</span>
+                </span>
+                <span class="font-weight-medium">{{ formatCurrency(item.subtotal) }}</span>
+              </div>
+              <div v-if="ordersById.get(stop.id)?.delivery_notes" class="muted text-body-2">
+                {{ ordersById.get(stop.id)?.delivery_notes }}
               </div>
             </div>
 
