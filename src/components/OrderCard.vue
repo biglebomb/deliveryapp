@@ -92,7 +92,13 @@ async function copySummary() {
 }
 
 function staticMapUrl(lat: number, lng: number): string {
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=15&size=600x200&markers=${lat},${lng},red-pushpin`;
+  // OSM's static-image service (staticmap.openstreetmap.de) was discontinued, so
+  // use the maintained embed map instead — free, no API key. A small bbox around
+  // the point frames it at roughly street zoom; marker drops a pin on the spot.
+  const dLat = 0.0018;
+  const dLng = 0.006;
+  const bbox = `${lng - dLng},${lat - dLat},${lng + dLng},${lat + dLat}`;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
 }
 </script>
 
@@ -126,13 +132,13 @@ function staticMapUrl(lat: number, lng: number): string {
       </div>
     </div>
 
-    <img
+    <iframe
       v-if="order.latitude !== null && order.longitude !== null"
       :src="staticMapUrl(order.latitude, order.longitude)"
       loading="lazy"
       class="mt-3 rounded"
-      style="width: 100%; height: 120px; object-fit: cover; object-position: center"
-      alt="Delivery location"
+      style="width: 100%; height: 120px; border: 0; display: block; pointer-events: none"
+      title="Delivery location"
     />
 
     <div v-if="order.customer?.address || order.delivery_notes || driverName" class="mt-3 muted text-body-2">
