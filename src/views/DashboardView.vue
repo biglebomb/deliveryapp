@@ -28,6 +28,10 @@ const activeOrders = computed(() =>
   orders.value.filter((o) => ['pending', 'preparing', 'delivering'].includes(o.status))
 );
 
+const todayDelivered = computed(() =>
+  todayOrders.value.filter((o) => o.status === 'delivered').length
+);
+
 const unpaidTotal = computed(() =>
   orders.value.filter((o) => o.payment_status === 'unpaid').reduce((s, o) => s + Number(o.total_amount), 0)
 );
@@ -54,7 +58,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    [orders.value, pendingInbox.value] = await Promise.all([fetchOrders(), countPendingInbox()]);
+    [orders.value, pendingInbox.value] = await Promise.all([fetchOrders(true), countPendingInbox()]);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load dashboard.';
   } finally {
@@ -88,8 +92,8 @@ onMounted(load);
         <div class="metric-value">{{ formatCurrency(todaySales) }}</div>
       </v-card>
       <v-card class="metric">
-        <div class="muted text-body-2">Active</div>
-        <div class="metric-value">{{ activeOrders.length }}</div>
+        <div class="muted text-body-2">Delivered today</div>
+        <div class="metric-value">{{ todayDelivered }}</div>
       </v-card>
       <v-card class="metric">
         <div class="muted text-body-2">Unpaid total</div>
