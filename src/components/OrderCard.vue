@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import LocationPicker from './LocationPicker.vue';
 import { buildOrderSummary, formatCurrency, formatDateTime, whatsappUrl } from '../lib/format';
 import { geocodeAddress } from '../lib/maps';
@@ -12,6 +13,8 @@ const props = defineProps<{
   editable?: boolean;
   drivers?: Profile[];
 }>();
+
+const router = useRouter();
 
 const emit = defineEmits<{
   status: [id: string, status: OrderStatus];
@@ -87,6 +90,10 @@ const addressIsLink = computed(() => {
 async function copySummary() {
   await navigator.clipboard.writeText(summary.value);
 }
+
+function staticMapUrl(lat: number, lng: number): string {
+  return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=15&size=600x200&markers=${lat},${lng},red-pushpin`;
+}
 </script>
 
 <template>
@@ -94,7 +101,12 @@ async function copySummary() {
     <div class="d-flex align-start justify-space-between ga-3">
       <div>
         <div class="section-title">{{ order.customer?.name ?? 'Customer' }}</div>
-        <div class="muted text-body-2">{{ formatDateTime(order.order_date) }}</div>
+        <div class="d-flex align-center ga-2 muted text-body-2">
+          <span>{{ formatDateTime(order.order_date) }}</span>
+          <v-chip v-if="order.delivery_area" size="x-small" prepend-icon="mdi-map-marker-radius">
+            {{ order.delivery_area }}
+          </v-chip>
+        </div>
       </div>
       <div class="text-right">
         <div class="font-weight-bold">{{ formatCurrency(order.total_amount) }}</div>
@@ -113,6 +125,15 @@ async function copySummary() {
         <span class="font-weight-medium">{{ formatCurrency(item.subtotal) }}</span>
       </div>
     </div>
+
+    <img
+      v-if="order.latitude !== null && order.longitude !== null"
+      :src="staticMapUrl(order.latitude, order.longitude)"
+      loading="lazy"
+      class="mt-3 rounded"
+      style="width: 100%; height: 120px; object-fit: cover; object-position: center"
+      alt="Delivery location"
+    />
 
     <div v-if="order.customer?.address || order.delivery_notes || driverName" class="mt-3 muted text-body-2">
       <div v-if="order.customer?.address">{{ order.customer.address }}</div>
@@ -180,6 +201,7 @@ async function copySummary() {
         WhatsApp
       </v-btn>
       <v-btn variant="text" prepend-icon="mdi-content-copy" @click="copySummary">Copy</v-btn>
+      <v-btn v-if="editable" variant="text" prepend-icon="mdi-pencil" @click="router.push(`/orders/${order.id}/edit`)">Edit</v-btn>
     </div>
 
     <v-dialog v-model="showLocation" max-width="520">

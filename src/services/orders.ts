@@ -139,6 +139,65 @@ export async function assignDriver(id: string, assigned_driver_id: string | null
   if (error) throw error;
 }
 
+export async function fetchOrderById(id: string): Promise<Order> {
+  const { data, error } = await requireSupabase().from('orders').select(orderSelect).eq('id', id).single();
+  if (error) throw error;
+  return data as Order;
+}
+
+export async function updateOrder(
+  id: string,
+  input: {
+    items: NewOrderItem[];
+    deliveryNotes: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    deliveryArea?: string | null;
+  }
+): Promise<void> {
+  const client = requireSupabase();
+  const lineTotal = (item: NewOrderItem) =>
+    (Number(item.product.price) + Number(item.packaging?.price ?? 0)) * item.quantity;
+  const totalAmount = input.items.reduce((total, item) => total + lineTotal(item), 0);
+
+  const { error: orderError } = await client.from('orders').update({
+    total_amount: totalAmount,
+    delivery_notes: input.deliveryNotes,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+    delivery_area: input.deliveryArea ?? null
+  }).eq('id', id);
+  if (orderError) throw orderError;
+
+  const { error: deleteError } = await client.from('order_items').delete().eq('order_id', id);
+  if (deleteError) throw deleteError;
+
+  if (input.items.length > 0) {
+    const itemRows = input.items.map((item) => ({
+      order_id: id,
+      product_id: item.product.id,
+      product_name_snapshot: item.product.name,
+      unit_price_snapshot: item.product.price,
+      quantity: item.quantity,
+      subtotal: lineTotal(item),
+      packaging_id: item.packaging?.id ?? null,
+      packaging_name_snapshot: item.packaging?.name ?? null,
+      packaging_fee_snapshot: Number(item.packaging?.price ?? 0)
+    }));
+    const { error: itemError } = await client.from('order_items').insert(itemRows);
+    if (itemError) throw itemError;
+  }
+}
+
+/** Unarchive a delivered order and set it back to pending so it re-appears in the orders list. */
+export async function reopenOrder(id: string): Promise<void> {
+  const { error } = await requireSupabase()
+    .from('orders')
+    .update({ archived_at: null, status: 'pending' })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 export async function updateOrderLocation(
   id: string,
   latitude: number | null,
