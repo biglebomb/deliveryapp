@@ -145,14 +145,28 @@ async function optimize() {
 
 async function setStatus(id: string, status: OrderStatus) {
   await updateOrderStatus(id, status);
-  await load();
+  // Update locally instead of refetching — a full reload re-runs the map's draw()
+  // (and can remount it, a billable Maps load) on every action.
+  if (status === 'delivered') {
+    // Delivered orders leave the active list; drop the card without a refetch.
+    orders.value = orders.value.filter((o) => o.id !== id);
+  } else {
+    const order = ordersById.value.get(id);
+    if (order) order.status = status;
+  }
 }
 
 async function markPaid(id: string) {
   const method = methodChoice[id];
   if (!method) return;
   await updatePayment(id, 'paid', method);
-  await load();
+  // Update locally so the swipe unlocks without reloading (and re-rendering) the map.
+  const order = ordersById.value.get(id);
+  if (order) {
+    order.payment_status = 'paid';
+    order.payment_method = method;
+    order.paid_at = new Date().toISOString();
+  }
 }
 
 function navigateUrl(stop: RouteStop): string {
@@ -257,7 +271,7 @@ onMounted(load);
               <div v-for="item in ordersById.get(stop.id)!.order_items" :key="item.id" class="d-flex justify-space-between text-body-2">
                 <span>
                   {{ item.quantity }}× {{ item.product_name_snapshot }}
-                  <span v-if="item.packaging_name_snapshot && item.packaging_fee_snapshot > 0" class="muted"> · {{ item.packaging_name_snapshot }}</span>
+                  <span v-if="item.packaging_name_snapshot" class="muted"> · {{ item.packaging_name_snapshot }}</span>
                 </span>
                 <span class="font-weight-medium">{{ formatCurrency(item.subtotal) }}</span>
               </div>
