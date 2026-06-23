@@ -4,13 +4,16 @@ import { useRouter } from 'vue-router';
 import { formatCurrency } from '../lib/format';
 import { countPendingInbox } from '../services/inbox';
 import { fetchOrders, updateOrderStatus } from '../services/orders';
-import type { Order, OrderStatus } from '../types/models';
+import { fetchSubscriptions, generateTodaysSubscriptionOrders } from '../services/subscriptions';
+import type { Order, OrderStatus, Subscription } from '../types/models';
 
 const router = useRouter();
 const orders = ref<Order[]>([]);
+const subscriptions = ref<Subscription[]>([]);
 const loading = ref(true);
 const error = ref('');
 const pendingInbox = ref(0);
+const generatedNotice = ref('');
 
 const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
 
@@ -24,16 +27,17 @@ const todayOrders = computed(() =>
 
 const todaySales = computed(() => todayOrders.value.reduce((s, o) => s + Number(o.total_amount), 0));
 
-const activeOrders = computed(() =>
-  orders.value.filter((o) => ['pending', 'preparing', 'delivering'].includes(o.status))
-);
-
 const todayDelivered = computed(() =>
   todayOrders.value.filter((o) => o.status === 'delivered').length
 );
 
 const unpaidTotal = computed(() =>
   orders.value.filter((o) => o.payment_status === 'unpaid').reduce((s, o) => s + Number(o.total_amount), 0)
+);
+
+// Active subscriptions down to their last few prepaid deliveries — nudge to renew.
+const lowSubscriptions = computed(() =>
+  subscriptions.value.filter((s) => s.status === 'active' && s.deliveries_total - s.deliveries_used <= 3)
 );
 
 const statusConfig: Record<OrderStatus, { color: string; label: string }> = {
@@ -58,7 +62,14 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    [orders.value, pendingInbox.value] = await Promise.all([fetchOrders(true), countPendingInbox()]);
+    // Auto-generate today's prepaid subscription orders (idempotent) before loading.
+    const created = await generateTodaysSubscriptionOrders();
+    if (created > 0) generatedNotice.value = `${created} subscription order${created > 1 ? 's' : ''} generated for today.`;
+    [orders.value, pendingInbox.value, subscriptions.value] = await Promise.all([
+      fetchOrders(true),
+      countPendingInbox(),
+      fetchSubscriptions()
+    ]);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load dashboard.';
   } finally {
@@ -80,6 +91,16 @@ onMounted(load);
     </div>
 
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
+    <v-alert
+      v-if="generatedNotice"
+      type="success"
+      variant="tonal"
+      class="mb-4"
+      closable
+      @click:close="generatedNotice = ''"
+    >
+      {{ generatedNotice }}
+    </v-alert>
 
     <!-- Stat cards -->
     <div class="metric-grid mb-4">
@@ -115,6 +136,29 @@ onMounted(load);
         <div>
           <div class="font-weight-bold">{{ pendingInbox }} order{{ pendingInbox > 1 ? 's' : '' }} waiting in inbox</div>
           <div class="text-body-2">Tap to review and confirm</div>
+        </div>
+      </div>
+      <v-icon icon="mdi-chevron-right" />
+    </v-card>
+
+    <!-- Subscription low-balance nudge -->
+    <v-card
+      v-if="lowSubscriptions.length > 0"
+      class="mb-4 pa-4 d-flex align-center justify-space-between"
+      color="error"
+      variant="tonal"
+      style="cursor: pointer"
+      @click="router.push('/subscriptions')"
+    >
+      <div class="d-flex align-center ga-3">
+        <v-icon icon="mdi-calendar-alert" size="24" />
+        <div>
+          <div class="font-weight-bold">
+            {{ lowSubscriptions.length }} subscription{{ lowSubscriptions.length > 1 ? 's' : '' }} running low
+          </div>
+          <div class="text-body-2">
+            {{ lowSubscriptions.map((s) => `${s.customer?.name ?? 'Customer'} (${s.deliveries_total - s.deliveries_used} left)`).join(', ') }}
+          </div>
         </div>
       </div>
       <v-icon icon="mdi-chevron-right" />
