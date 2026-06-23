@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useDisplay } from 'vuetify';
 import EmptyState from '../components/EmptyState.vue';
 import LocationPicker from '../components/LocationPicker.vue';
 import { formatCurrency, formatDateTime } from '../lib/format';
@@ -13,6 +14,7 @@ import { fetchPackagingOptions } from '../services/packaging';
 import { fetchProducts } from '../services/products';
 import type { Area, Customer, InboxItem, PackagingOption, Product } from '../types/models';
 
+const { mobile } = useDisplay();
 const items = ref<InboxItem[]>([]);
 const products = ref<Product[]>([]);
 const customers = ref<Customer[]>([]);
@@ -255,69 +257,109 @@ onMounted(load);
     </div>
     <EmptyState v-else-if="!loading" icon="mdi-inbox-outline" title="Inbox empty" text="Parsed WhatsApp orders waiting for review will show here." />
 
-    <v-dialog :model-value="active !== null" max-width="640" scrollable @update:model-value="active = null">
-      <v-card v-if="active" class="pa-4">
-        <div class="section-title mb-2">Review order</div>
-        <v-alert v-if="error" type="error" density="compact" class="mb-3">{{ error }}</v-alert>
+    <v-dialog
+      :model-value="active !== null"
+      :fullscreen="mobile"
+      max-width="640"
+      scrollable
+      @update:model-value="active = null"
+    >
+      <v-card v-if="active">
+        <!-- Header -->
+        <v-toolbar density="compact" color="surface">
+          <v-btn icon="mdi-close" variant="text" :disabled="saving" @click="active = null" />
+          <v-toolbar-title class="text-body-1 font-weight-bold">Review order</v-toolbar-title>
+          <template #append>
+            <v-btn color="success" variant="tonal" :loading="saving" prepend-icon="mdi-check-circle" @click="confirm">
+              Confirm
+            </v-btn>
+          </template>
+        </v-toolbar>
 
-        <LocationPicker
-          v-model:latitude="draftLat"
-          v-model:longitude="draftLng"
-          :area-label="draftArea"
-          :area-unknown="draftLat !== null && !draftArea"
-        />
-        <v-btn
-          v-if="rawMapsLink"
-          :loading="geocoding"
-          variant="text"
-          size="small"
-          prepend-icon="mdi-map-search"
-          class="mt-1 mb-3"
-          @click="findLocation"
-        >
-          Find from Maps link
-        </v-btn>
-        <div v-else class="mb-3" />
+        <v-card-text class="pa-4 stack">
+          <v-alert v-if="error" type="error" density="compact">{{ error }}</v-alert>
 
-        <div class="section-title text-body-1 mb-1">Customer</div>
-        <v-autocomplete
-          v-model="linkCustomerId"
-          :items="customers"
-          item-title="name"
-          item-value="id"
-          label="Link existing customer (optional)"
-          clearable
-          hide-details
-          class="mb-2"
-        />
-        <div v-if="!linkCustomerId" class="grid cols-2 mb-2">
-          <v-text-field v-model="newCustomer.name" label="New customer name" hide-details />
-          <v-text-field v-model="newCustomer.phone" label="Phone" inputmode="tel" hide-details />
-        </div>
+          <!-- Raw text collapsible -->
+          <v-expansion-panels v-if="active.raw_text" variant="accordion">
+            <v-expansion-panel>
+              <v-expansion-panel-title class="text-body-2 muted py-2">Teks asli WhatsApp</v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <div class="text-body-2" style="white-space: pre-wrap">{{ active.raw_text }}</div>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
 
-        <v-textarea v-model="draftAddress" label="Address" rows="2" auto-grow hide-details class="mb-2" />
-        <v-textarea v-model="draftNotes" label="Delivery notes" rows="1" auto-grow hide-details class="mb-3" />
-
-        <div class="section-title text-body-1 mb-1 mt-2">Items</div>
-        <div class="stack">
-          <div v-for="(line, i) in draftItems" :key="i" class="d-flex ga-2 align-center">
-            <v-select v-model="line.productId" :items="productItems" label="Product" density="compact" hide-details style="flex: 2" />
-            <v-text-field v-model.number="line.quantity" type="number" min="1" label="Qty" density="compact" hide-details style="max-width: 76px" />
-            <v-select v-model="line.packagingId" :items="packagingItems" label="Pack" density="compact" hide-details style="flex: 1" />
-            <v-btn icon="mdi-close" variant="text" size="small" @click="removeLine(i)" />
+          <!-- Location -->
+          <div>
+            <div class="section-title text-body-1 mb-2">Lokasi</div>
+            <LocationPicker
+              v-model:latitude="draftLat"
+              v-model:longitude="draftLng"
+              :area-label="draftArea"
+              :area-unknown="draftLat !== null && !draftArea"
+            />
+            <v-btn
+              v-if="rawMapsLink"
+              :loading="geocoding"
+              variant="text"
+              size="small"
+              prepend-icon="mdi-map-search"
+              class="mt-1"
+              @click="findLocation"
+            >
+              Find from Maps link
+            </v-btn>
           </div>
-        </div>
-        <v-btn variant="text" size="small" prepend-icon="mdi-plus" class="mt-1" @click="addLine">Add item</v-btn>
 
-        <div class="d-flex align-center justify-space-between mt-4">
-          <span class="muted">Total</span>
-          <span class="metric-value">{{ formatCurrency(draftTotal) }}</span>
-        </div>
+          <!-- Customer -->
+          <div>
+            <div class="section-title text-body-1 mb-2">Pelanggan</div>
+            <v-autocomplete
+              v-model="linkCustomerId"
+              :items="customers"
+              item-title="name"
+              item-value="id"
+              label="Link existing customer (optional)"
+              clearable
+              hide-details
+              class="mb-3"
+            />
+            <div v-if="!linkCustomerId" class="stack">
+              <v-text-field v-model="newCustomer.name" label="New customer name" hide-details />
+              <v-text-field v-model="newCustomer.phone" label="Phone" inputmode="tel" hide-details />
+            </div>
+            <v-textarea v-model="draftAddress" label="Address" rows="2" auto-grow hide-details class="mt-3" />
+            <v-textarea v-model="draftNotes" label="Delivery notes" rows="1" auto-grow hide-details class="mt-3" />
+          </div>
 
-        <div class="d-flex ga-2 justify-end mt-4">
-          <v-btn variant="text" :disabled="saving" @click="active = null">Cancel</v-btn>
-          <v-btn color="success" :loading="saving" prepend-icon="mdi-check-circle" @click="confirm">Confirm order</v-btn>
-        </div>
+          <!-- Items -->
+          <div>
+            <div class="section-title text-body-1 mb-2">Items</div>
+            <div class="stack">
+              <div v-for="(line, i) in draftItems" :key="i" class="pa-3 rounded" style="border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity))">
+                <div class="d-flex ga-2 align-center mb-2">
+                  <v-select v-model="line.productId" :items="productItems" label="Product" density="compact" hide-details class="flex-grow-1" />
+                  <v-btn icon="mdi-close" variant="text" size="small" @click="removeLine(i)" />
+                </div>
+                <div class="d-flex ga-2">
+                  <v-text-field v-model.number="line.quantity" type="number" min="1" label="Qty" density="compact" hide-details style="max-width: 88px" />
+                  <v-select v-model="line.packagingId" :items="packagingItems" label="Packaging" density="compact" hide-details class="flex-grow-1" />
+                </div>
+              </div>
+            </div>
+            <v-btn variant="text" size="small" prepend-icon="mdi-plus" class="mt-2" @click="addLine">Add item</v-btn>
+          </div>
+
+          <!-- Total + actions -->
+          <div class="d-flex align-center justify-space-between pt-2">
+            <span class="muted">Total</span>
+            <span class="metric-value">{{ formatCurrency(draftTotal) }}</span>
+          </div>
+
+          <v-btn color="success" size="large" :loading="saving" prepend-icon="mdi-check-circle" block @click="confirm">
+            Confirm order
+          </v-btn>
+        </v-card-text>
       </v-card>
     </v-dialog>
   </main>
