@@ -65,7 +65,7 @@ watch(mdAndUp, (isDesktop) => {
 });
 
 function go(path: string) {
-  drawer.value = false;
+  if (!mdAndUp.value) drawer.value = false;
   if (route.path !== path) void router.push(path);
 }
 
@@ -91,7 +91,7 @@ async function signOut() {
     </v-app-bar>
 
     <!-- Navigation drawer: permanent sidebar on md+, temporary overlay on mobile -->
-    <v-navigation-drawer v-if="showNav" v-model="drawer" :permanent="mdAndUp">
+    <v-navigation-drawer v-if="showNav" v-model="drawer" :permanent="mdAndUp" :persistent="mdAndUp">
       <div v-if="mdAndUp" class="d-flex align-center ga-2 px-4 pt-4 pb-2">
         <v-icon icon="mdi-bottle-tonic" color="primary" size="22" />
         <span class="font-weight-bold" style="font-size: 15px">Milk Delivery</span>
