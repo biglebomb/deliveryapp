@@ -84,6 +84,36 @@ export interface NewOrderItem {
   packaging?: PackagingOption | null;
 }
 
+export interface SubscriptionItem {
+  product_id: string;
+  product_name: string;
+  unit_price: number;
+  quantity: number;
+  packaging_id: string | null;
+  packaging_name: string | null;
+  packaging_fee: number;
+}
+
+export type SubscriptionStatus = 'active' | 'paused' | 'completed' | 'cancelled';
+
+export interface Subscription {
+  id: string;
+  customer_id: string;
+  items: SubscriptionItem[];
+  weekdays: number[];
+  deliveries_total: number;
+  deliveries_used: number;
+  price_per_delivery: number;
+  amount_paid: number;
+  delivery_notes: string | null;
+  status: SubscriptionStatus;
+  start_date: string;
+  last_generated_date: string | null;
+  created_at: string;
+  updated_at: string;
+  customer?: Customer;
+}
+
 export interface ParsedOrderItem {
   name: string;
   quantity: number;
@@ -124,6 +154,8 @@ export interface Area {
   created_at: string;
   updated_at: string;
 }
+
+export const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export const orderStatuses: OrderStatus[] = ['pending', 'preparing', 'delivering', 'delivered', 'cancelled'];
 export const paymentStatuses: PaymentStatus[] = ['unpaid', 'paid'];
