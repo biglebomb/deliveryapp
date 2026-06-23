@@ -34,6 +34,7 @@ const menuItems = [
   { title: 'Orders', value: '/orders', icon: 'mdi-clipboard-list-outline' },
   { title: 'Inbox', value: '/inbox', icon: 'mdi-inbox-outline' },
   { title: 'Deliveries', value: '/deliveries', icon: 'mdi-truck-delivery-outline' },
+  { title: 'Subscriptions', value: '/subscriptions', icon: 'mdi-calendar-sync-outline' },
   { title: 'Customers', value: '/customers', icon: 'mdi-account-group-outline' },
   { title: 'Products', value: '/products', icon: 'mdi-bottle-tonic-outline' },
   { title: 'Packaging', value: '/packaging', icon: 'mdi-package-variant' },

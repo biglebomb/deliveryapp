@@ -11,6 +11,7 @@ export const router = createRouter({
     { path: '/orders/new', name: 'new-order', component: () => import('../views/NewOrderView.vue') },
     { path: '/orders/:id/edit', name: 'edit-order', component: () => import('../views/EditOrderView.vue') },
     { path: '/inbox', name: 'inbox', component: () => import('../views/InboxView.vue') },
+    { path: '/subscriptions', name: 'subscriptions', component: () => import('../views/SubscriptionsView.vue') },
     { path: '/deliveries', name: 'deliveries', component: () => import('../views/DeliveriesView.vue') },
     { path: '/customers', name: 'customers', component: () => import('../views/CustomersView.vue') },
     { path: '/products', name: 'products', component: () => import('../views/ProductsView.vue') },
