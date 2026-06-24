@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
+import { mapCenter } from '../lib/branchContext';
 import { loadGoogleMaps } from '../lib/maps';
 import type { AreaPoint } from '../types/models';
 
@@ -22,8 +23,6 @@ let polygon: google.maps.Polygon | null = null;
 let overlayPolys: google.maps.Polygon[] = [];
 let lastEmitted = '';
 let suppress = false;
-
-const JAKARTA = { lat: -6.2088, lng: 106.8456 };
 
 function readPath(): AreaPoint[] {
   if (!polygon) return [];
@@ -109,7 +108,7 @@ onMounted(async () => {
     maps = await loadGoogleMaps();
     if (!mapEl.value) return;
     map = new maps.Map(mapEl.value, {
-      center: JAKARTA,
+      center: mapCenter(),
       zoom: 12,
       disableDefaultUI: true,
       zoomControl: true,

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
+import LocationPicker from '../components/LocationPicker.vue';
 import { useBranch } from '../composables/useBranch';
 import { formatCurrency } from '../lib/format';
 import { createBranch, fetchBranches, updateBranch } from '../services/branches';
@@ -12,7 +13,10 @@ const saving = ref(false);
 const error = ref('');
 const dialog = ref(false);
 const editingId = ref<string | null>(null);
-const form = reactive({ name: '', address: '', phone: '', delivery_fee: 0, is_active: true });
+const form = reactive<{
+  name: string; address: string; phone: string; delivery_fee: number;
+  latitude: number | null; longitude: number | null; is_active: boolean;
+}>({ name: '', address: '', phone: '', delivery_fee: 0, latitude: null, longitude: null, is_active: true });
 
 const headers = [
   { title: 'Branch', key: 'name' },
@@ -36,7 +40,7 @@ async function load() {
 
 function openAdd() {
   editingId.value = null;
-  Object.assign(form, { name: '', address: '', phone: '', delivery_fee: 0, is_active: true });
+  Object.assign(form, { name: '', address: '', phone: '', delivery_fee: 0, latitude: null, longitude: null, is_active: true });
   error.value = '';
   dialog.value = true;
 }
@@ -48,6 +52,8 @@ function openEdit(branch: Branch) {
     address: branch.address ?? '',
     phone: branch.phone ?? '',
     delivery_fee: Number(branch.delivery_fee ?? 0),
+    latitude: branch.latitude,
+    longitude: branch.longitude,
     is_active: branch.is_active
   });
   error.value = '';
@@ -66,7 +72,9 @@ async function submit() {
       name: form.name.trim(),
       address: form.address.trim() || null,
       phone: form.phone.trim() || null,
-      delivery_fee: Number(form.delivery_fee || 0)
+      delivery_fee: Number(form.delivery_fee || 0),
+      latitude: form.latitude,
+      longitude: form.longitude
     };
     if (editingId.value) {
       await updateBranch(editingId.value, { ...values, is_active: form.is_active });
@@ -150,6 +158,8 @@ onMounted(load);
             hint="Used when an order's area has no fee of its own"
             persistent-hint
           />
+          <LocationPicker v-model:latitude="form.latitude" v-model:longitude="form.longitude" />
+          <div class="muted text-body-2" style="margin-top: -8px">Map center for this branch (areas, deliveries, picking locations).</div>
           <v-switch v-if="editingId" v-model="form.is_active" color="primary" label="Active" hide-details />
         </div>
         <div class="d-flex ga-2 justify-end mt-4">

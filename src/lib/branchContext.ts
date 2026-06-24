@@ -9,6 +9,19 @@ const activeBranchId = ref<string | null>(
   typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
 );
 
+// Map fallback center: the active branch's coordinates when known, else Jakarta.
+const DEFAULT_CENTER = { lat: -6.2088, lng: 106.8456 };
+const activeBranchCenter = ref<{ lat: number; lng: number } | null>(null);
+
+export function setActiveBranchCenter(center: { lat: number; lng: number } | null): void {
+  activeBranchCenter.value = center;
+}
+
+/** Default center for maps — the active branch, falling back to Jakarta. */
+export function mapCenter(): { lat: number; lng: number } {
+  return activeBranchCenter.value ?? DEFAULT_CENTER;
+}
+
 /** Reactive ref to the active branch id (for components / router-view keying). */
 export function activeBranch() {
   return activeBranchId;

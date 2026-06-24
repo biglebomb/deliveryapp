@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { mapCenter } from '../lib/branchContext';
 import { loadGoogleMaps } from '../lib/maps';
 import { parseLatLng } from '../lib/route';
 
@@ -15,7 +16,6 @@ const showMap = ref(false);
 const mapEl = ref<HTMLElement | null>(null);
 const mapError = ref('');
 
-const JAKARTA = { lat: -6.2088, lng: 106.8456 };
 let maps: typeof google.maps | null = null;
 let map: google.maps.Map | null = null;
 let marker: google.maps.Marker | null = null;
@@ -86,7 +86,7 @@ async function initMap() {
     if (!mapEl.value) return;
     const hasPoint = latitude.value !== null && longitude.value !== null;
     map = new maps.Map(mapEl.value, {
-      center: hasPoint ? { lat: latitude.value as number, lng: longitude.value as number } : JAKARTA,
+      center: hasPoint ? { lat: latitude.value as number, lng: longitude.value as number } : mapCenter(),
       zoom: hasPoint ? 16 : 12,
       disableDefaultUI: true,
       zoomControl: true,

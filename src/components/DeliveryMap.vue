@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { mapCenter } from '../lib/branchContext';
 import { loadGoogleMaps } from '../lib/maps';
 import type { GeoPoint, RouteStop } from '../lib/route';
 
@@ -27,8 +28,6 @@ let renderer: google.maps.DirectionsRenderer | null = null;
 let hasFit = false;
 let prevStart: GeoPoint | null = null;
 let prevDirections: google.maps.DirectionsResult | null = null;
-
-const JAKARTA: GeoPoint = { lat: -6.2088, lng: 106.8456 };
 
 function clearMarkers() {
   markerById.forEach((m) => m.setMap(null));
@@ -143,7 +142,7 @@ onMounted(async () => {
     maps = await loadGoogleMaps();
     if (!mapEl.value) return;
     map = new maps.Map(mapEl.value, {
-      center: JAKARTA,
+      center: mapCenter(),
       zoom: 12,
       disableDefaultUI: true,
       zoomControl: true,
