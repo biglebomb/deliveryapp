@@ -8,6 +8,7 @@ export interface Branch {
   name: string;
   address: string | null;
   phone: string | null;
+  delivery_fee: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -79,6 +80,7 @@ export interface Order {
   payment_status: PaymentStatus;
   payment_method: PaymentMethod | null;
   delivery_notes: string | null;
+  delivery_fee: number;
   latitude: number | null;
   longitude: number | null;
   delivery_area: string | null;
@@ -168,6 +170,7 @@ export interface Area {
   name: string;
   color: string | null;
   polygon: AreaPoint[];
+  delivery_fee: number | null;
   branch_id: string;
   created_at: string;
   updated_at: string;

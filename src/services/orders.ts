@@ -71,6 +71,7 @@ export async function createOrder(input: {
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   deliveryNotes: string | null;
+  deliveryFee?: number;
   latitude?: number | null;
   longitude?: number | null;
   deliveryArea?: string | null;
@@ -78,7 +79,8 @@ export async function createOrder(input: {
   const client = requireSupabase();
   const lineTotal = (item: NewOrderItem) =>
     (Number(item.product.price) + Number(item.packaging?.price ?? 0)) * item.quantity;
-  const totalAmount = input.items.reduce((total, item) => total + lineTotal(item), 0);
+  const deliveryFee = Number(input.deliveryFee ?? 0);
+  const totalAmount = input.items.reduce((total, item) => total + lineTotal(item), 0) + deliveryFee;
 
   const { data: order, error: orderError } = await client
     .from('orders')
@@ -90,6 +92,7 @@ export async function createOrder(input: {
       payment_status: input.paymentStatus,
       paid_at: input.paymentStatus === 'paid' ? new Date().toISOString() : null,
       delivery_notes: input.deliveryNotes,
+      delivery_fee: deliveryFee,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
       delivery_area: input.deliveryArea ?? null,
@@ -181,6 +184,7 @@ export async function updateOrder(
   input: {
     items: NewOrderItem[];
     deliveryNotes: string | null;
+    deliveryFee?: number;
     latitude?: number | null;
     longitude?: number | null;
     deliveryArea?: string | null;
@@ -189,11 +193,13 @@ export async function updateOrder(
   const client = requireSupabase();
   const lineTotal = (item: NewOrderItem) =>
     (Number(item.product.price) + Number(item.packaging?.price ?? 0)) * item.quantity;
-  const totalAmount = input.items.reduce((total, item) => total + lineTotal(item), 0);
+  const deliveryFee = Number(input.deliveryFee ?? 0);
+  const totalAmount = input.items.reduce((total, item) => total + lineTotal(item), 0) + deliveryFee;
 
   const { error: orderError } = await client.from('orders').update({
     total_amount: totalAmount,
     delivery_notes: input.deliveryNotes,
+    delivery_fee: deliveryFee,
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,
     delivery_area: input.deliveryArea ?? null

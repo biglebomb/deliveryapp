@@ -2,8 +2,9 @@
 import { computed, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import LocationPicker from '../components/LocationPicker.vue';
+import { useBranch } from '../composables/useBranch';
 import { formatCurrency } from '../lib/format';
-import { assignArea } from '../lib/route';
+import { assignArea, resolveDeliveryFee } from '../lib/route';
 import { fetchAreas } from '../services/areas';
 import { fetchCustomers, saveCustomer } from '../services/customers';
 import { createOrder } from '../services/orders';
@@ -12,12 +13,16 @@ import { fetchProducts } from '../services/products';
 import type { Area, Customer, NewOrderItem, OrderStatus, PackagingOption, PaymentStatus, Product } from '../types/models';
 
 const router = useRouter();
+const branchCtx = useBranch();
 const customers = ref<Customer[]>([]);
 const products = ref<Product[]>([]);
 const areas = ref<Area[]>([]);
 const packagingOptions = ref<PackagingOption[]>([]);
 const selectedCustomerId = ref<string | null>(null);
 const deliveryNotes = ref('');
+const deliveryFee = ref(0);
+// Once the user types a fee, stop auto-filling it from the area/branch default.
+const feeTouched = ref(false);
 const latitude = ref<number | null>(null);
 const longitude = ref<number | null>(null);
 const status = ref<OrderStatus>('pending');
@@ -69,7 +74,16 @@ function lineSubtotal(line: Line): number {
   if (!product) return 0;
   return (Number(product.price) + Number(pack?.price ?? 0)) * (line.quantity || 0);
 }
-const total = computed(() => lines.value.reduce((sum, l) => sum + lineSubtotal(l), 0));
+const itemsTotal = computed(() => lines.value.reduce((sum, l) => sum + lineSubtotal(l), 0));
+const total = computed(() => itemsTotal.value + Number(deliveryFee.value || 0));
+
+// Default delivery fee: the assigned area's fee, else the branch default.
+const defaultDeliveryFee = computed(() =>
+  resolveDeliveryFee(assignedArea.value, areas.value, branchCtx.current.value?.delivery_fee ?? 0)
+);
+watch(defaultDeliveryFee, (fee) => {
+  if (!feeTouched.value) deliveryFee.value = fee;
+});
 
 function addLine(productId?: string) {
   lines.value.push({
@@ -120,7 +134,8 @@ async function load() {
       fetchCustomers(),
       fetchProducts(false),
       fetchAreas(),
-      fetchPackagingOptions(false)
+      fetchPackagingOptions(false),
+      branchCtx.loadBranches()
     ]);
     customers.value = customerRows;
     products.value = productRows;
@@ -130,6 +145,8 @@ async function load() {
     if (defaultPackaging.value && lines.value[0]) {
       lines.value[0].packagingId = defaultPackaging.value.id;
     }
+    // Seed the delivery fee from the branch default (area refines it once a location is set).
+    if (!feeTouched.value) deliveryFee.value = defaultDeliveryFee.value;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load order form.';
   } finally {
@@ -166,6 +183,7 @@ async function submit() {
       status: status.value,
       paymentStatus: paymentStatus.value,
       deliveryNotes: deliveryNotes.value.trim() || null,
+      deliveryFee: Number(deliveryFee.value || 0),
       latitude: latitude.value,
       longitude: longitude.value,
       deliveryArea: assignedArea.value
@@ -309,10 +327,30 @@ onMounted(load);
           :area-label="assignedArea"
           :area-unknown="latitude !== null && !assignedArea"
         />
+        <v-text-field
+          v-model.number="deliveryFee"
+          label="Delivery fee"
+          type="number"
+          min="0"
+          inputmode="numeric"
+          prefix="Rp"
+          class="mt-3"
+          hide-details
+          @update:model-value="feeTouched = true"
+        />
+        <div class="muted text-body-2 mt-1">Default from area, falls back to branch. Edit to override.</div>
       </v-card>
 
       <!-- Sticky footer total -->
       <v-card class="list-card pa-4 position-sticky" style="bottom: 72px; z-index: 2">
+        <div class="d-flex align-center justify-space-between text-body-2 muted mb-1">
+          <span>Items</span>
+          <span>{{ formatCurrency(itemsTotal) }}</span>
+        </div>
+        <div v-if="Number(deliveryFee) > 0" class="d-flex align-center justify-space-between text-body-2 muted mb-1">
+          <span>Delivery fee</span>
+          <span>{{ formatCurrency(Number(deliveryFee)) }}</span>
+        </div>
         <div class="d-flex align-center justify-space-between mb-3">
           <span class="section-title">Total</span>
           <span class="metric-value">{{ formatCurrency(total) }}</span>

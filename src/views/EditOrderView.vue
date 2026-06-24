@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import LocationPicker from '../components/LocationPicker.vue';
+import { useBranch } from '../composables/useBranch';
 import { formatCurrency } from '../lib/format';
-import { assignArea } from '../lib/route';
+import { assignArea, resolveDeliveryFee } from '../lib/route';
 import { fetchAreas } from '../services/areas';
 import { fetchOrderById, updateOrder } from '../services/orders';
 import { fetchPackagingOptions } from '../services/packaging';
@@ -12,6 +13,7 @@ import type { Area, NewOrderItem, Order, PackagingOption, Product } from '../typ
 
 const route = useRoute();
 const router = useRouter();
+const branchCtx = useBranch();
 const orderId = route.params.id as string;
 
 const order = ref<Order | null>(null);
@@ -19,6 +21,8 @@ const products = ref<Product[]>([]);
 const areas = ref<Area[]>([]);
 const packagingOptions = ref<PackagingOption[]>([]);
 const deliveryNotes = ref('');
+const deliveryFee = ref(0);
+const feeTouched = ref(false);
 const latitude = ref<number | null>(null);
 const longitude = ref<number | null>(null);
 const loading = ref(true);
@@ -53,7 +57,15 @@ function lineSubtotal(line: Line): number {
   if (!product) return 0;
   return (Number(product.price) + Number(pack?.price ?? 0)) * (line.quantity || 0);
 }
-const total = computed(() => lines.value.reduce((sum, l) => sum + lineSubtotal(l), 0));
+const itemsTotal = computed(() => lines.value.reduce((sum, l) => sum + lineSubtotal(l), 0));
+const total = computed(() => itemsTotal.value + Number(deliveryFee.value || 0));
+
+const defaultDeliveryFee = computed(() =>
+  resolveDeliveryFee(assignedArea.value, areas.value, branchCtx.current.value?.delivery_fee ?? 0)
+);
+watch(defaultDeliveryFee, (fee) => {
+  if (!feeTouched.value) deliveryFee.value = fee;
+});
 
 function addLine(productId?: string) {
   lines.value.push({
@@ -102,13 +114,17 @@ async function load() {
       fetchOrderById(orderId),
       fetchProducts(false),
       fetchAreas(),
-      fetchPackagingOptions(false)
+      fetchPackagingOptions(false),
+      branchCtx.loadBranches()
     ]);
     order.value = orderData;
     products.value = productRows;
     areas.value = areaRows;
     packagingOptions.value = packagingRows;
     deliveryNotes.value = orderData.delivery_notes ?? '';
+    // Keep the order's saved fee; don't let the default watcher overwrite it.
+    deliveryFee.value = Number(orderData.delivery_fee ?? 0);
+    feeTouched.value = true;
     latitude.value = orderData.latitude;
     longitude.value = orderData.longitude;
     // Each saved order item becomes its own line (preserves multi-packaging per product)
@@ -136,6 +152,7 @@ async function submit() {
     await updateOrder(orderId, {
       items: selectedItems.value,
       deliveryNotes: deliveryNotes.value.trim() || null,
+      deliveryFee: Number(deliveryFee.value || 0),
       latitude: latitude.value,
       longitude: longitude.value,
       deliveryArea: assignedArea.value
@@ -244,10 +261,29 @@ onMounted(load);
           :area-label="assignedArea"
           :area-unknown="latitude !== null && !assignedArea"
         />
+        <v-text-field
+          v-model.number="deliveryFee"
+          label="Delivery fee"
+          type="number"
+          min="0"
+          inputmode="numeric"
+          prefix="Rp"
+          class="mt-3"
+          hide-details
+          @update:model-value="feeTouched = true"
+        />
       </v-card>
 
       <!-- Sticky footer -->
       <v-card class="list-card pa-4 position-sticky" style="bottom: 72px; z-index: 2">
+        <div class="d-flex align-center justify-space-between text-body-2 muted mb-1">
+          <span>Items</span>
+          <span>{{ formatCurrency(itemsTotal) }}</span>
+        </div>
+        <div v-if="Number(deliveryFee) > 0" class="d-flex align-center justify-space-between text-body-2 muted mb-1">
+          <span>Delivery fee</span>
+          <span>{{ formatCurrency(Number(deliveryFee)) }}</span>
+        </div>
         <div class="d-flex align-center justify-space-between mb-3">
           <span class="section-title">Total</span>
           <span class="metric-value">{{ formatCurrency(total) }}</span>

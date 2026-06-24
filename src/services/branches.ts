@@ -12,6 +12,7 @@ export async function createBranch(input: {
   name: string;
   address?: string | null;
   phone?: string | null;
+  delivery_fee?: number;
 }): Promise<Branch> {
   const { data, error } = await requireSupabase().from('branches').insert(input).select().single();
   if (error) throw error;
@@ -20,7 +21,7 @@ export async function createBranch(input: {
 
 export async function updateBranch(
   id: string,
-  values: Partial<Pick<Branch, 'name' | 'address' | 'phone' | 'is_active'>>
+  values: Partial<Pick<Branch, 'name' | 'address' | 'phone' | 'is_active' | 'delivery_fee'>>
 ): Promise<void> {
   const { error } = await requireSupabase().from('branches').update(values).eq('id', id);
   if (error) throw error;

@@ -3,8 +3,9 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useDisplay } from 'vuetify';
 import EmptyState from '../components/EmptyState.vue';
 import LocationPicker from '../components/LocationPicker.vue';
+import { useBranch } from '../composables/useBranch';
 import { formatCurrency, formatDateTime } from '../lib/format';
-import { assignArea } from '../lib/route';
+import { assignArea, resolveDeliveryFee } from '../lib/route';
 import { fetchAreas } from '../services/areas';
 import { fetchCustomers, saveCustomer } from '../services/customers';
 import { isMapsLink, resolveMapsLink } from '../services/geo';
@@ -15,6 +16,7 @@ import { fetchProducts } from '../services/products';
 import type { Area, Customer, InboxItem, PackagingOption, Product } from '../types/models';
 
 const { mobile } = useDisplay();
+const branchCtx = useBranch();
 const items = ref<InboxItem[]>([]);
 const products = ref<Product[]>([]);
 const customers = ref<Customer[]>([]);
@@ -55,7 +57,7 @@ const packagingItems = computed(() =>
   packagingOptions.value.map((p) => ({ value: p.id, title: p.price > 0 ? `${p.name} (+${formatCurrency(p.price)})` : p.name }))
 );
 
-const draftTotal = computed(() =>
+const draftItemsTotal = computed(() =>
   draftItems.value.reduce((sum, d) => {
     const product = products.value.find((p) => p.id === d.productId);
     const pack = packagingOptions.value.find((p) => p.id === d.packagingId);
@@ -63,6 +65,12 @@ const draftTotal = computed(() =>
     return sum + (Number(product.price) + Number(pack?.price ?? 0)) * d.quantity;
   }, 0)
 );
+
+// Auto delivery fee from the resolved area, falling back to the branch default.
+const draftDeliveryFee = computed(() =>
+  resolveDeliveryFee(draftArea.value, areas.value, branchCtx.current.value?.delivery_fee ?? 0)
+);
+const draftTotal = computed(() => draftItemsTotal.value + draftDeliveryFee.value);
 
 async function load() {
   loading.value = true;
@@ -73,7 +81,8 @@ async function load() {
       fetchProducts(false),
       fetchCustomers(),
       fetchAreas(),
-      fetchPackagingOptions(false)
+      fetchPackagingOptions(false),
+      branchCtx.loadBranches()
     ]);
     items.value = inboxRows;
     products.value = productRows;
@@ -185,6 +194,7 @@ async function confirm() {
       status: 'pending',
       paymentStatus: 'unpaid',
       deliveryNotes: draftNotes.value.trim() || null,
+      deliveryFee: draftDeliveryFee.value,
       latitude: lat,
       longitude: lng,
       deliveryArea

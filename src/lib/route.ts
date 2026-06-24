@@ -83,6 +83,24 @@ export function assignArea(
   return null;
 }
 
+/**
+ * Default delivery fee for an order: the assigned area's fee when it has one,
+ * otherwise the branch default. `areaName` is the resolved area (from assignArea).
+ */
+export function resolveDeliveryFee(
+  areaName: string | null,
+  areas: { name: string; delivery_fee: number | null }[],
+  branchFee: number
+): number {
+  if (areaName) {
+    const area = areas.find((a) => a.name === areaName);
+    if (area && area.delivery_fee !== null && area.delivery_fee !== undefined) {
+      return Number(area.delivery_fee);
+    }
+  }
+  return Number(branchFee ?? 0);
+}
+
 /** Total path length in km for an ordered list of stops starting from `start`. */
 export function routeDistanceKm(start: GeoPoint, ordered: GeoPoint[]): number {
   let total = 0;

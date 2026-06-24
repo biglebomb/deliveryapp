@@ -130,6 +130,10 @@ function staticMapUrl(lat: number, lng: number): string {
         </span>
         <span class="font-weight-medium">{{ formatCurrency(item.subtotal) }}</span>
       </div>
+      <div v-if="Number(order.delivery_fee) > 0" class="d-flex justify-space-between ga-3">
+        <span class="muted">Delivery fee</span>
+        <span class="font-weight-medium">{{ formatCurrency(order.delivery_fee) }}</span>
+      </div>
     </div>
 
     <iframe

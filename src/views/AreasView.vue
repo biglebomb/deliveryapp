@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import AreaEditorMap from '../components/AreaEditorMap.vue';
 import EmptyState from '../components/EmptyState.vue';
+import { formatCurrency } from '../lib/format';
 import { deleteArea, fetchAreas, saveArea } from '../services/areas';
 import type { Area, AreaPoint } from '../types/models';
 
@@ -11,11 +12,12 @@ const areas = ref<Area[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
-const form = reactive<{ id: string; name: string; color: string; polygon: AreaPoint[] }>({
+const form = reactive<{ id: string; name: string; color: string; polygon: AreaPoint[]; deliveryFee: number | null }>({
   id: '',
   name: '',
   color: colors[0],
-  polygon: []
+  polygon: [],
+  deliveryFee: null
 });
 const areaToDelete = ref<Area | null>(null);
 const deleting = ref(false);
@@ -51,12 +53,13 @@ function edit(area: Area) {
     id: area.id,
     name: area.name,
     color: area.color ?? colors[0],
-    polygon: area.polygon.map((p) => ({ ...p }))
+    polygon: area.polygon.map((p) => ({ ...p })),
+    deliveryFee: area.delivery_fee
   });
 }
 
 function reset() {
-  Object.assign(form, { id: '', name: '', color: colors[0], polygon: [] });
+  Object.assign(form, { id: '', name: '', color: colors[0], polygon: [], deliveryFee: null });
 }
 
 async function submit() {
@@ -71,7 +74,8 @@ async function submit() {
       id: form.id || undefined,
       name: form.name.trim(),
       color: form.color,
-      polygon: form.polygon
+      polygon: form.polygon,
+      delivery_fee: form.deliveryFee === null || form.deliveryFee === ('' as unknown) ? null : Number(form.deliveryFee)
     });
     reset();
     await load();
@@ -130,6 +134,18 @@ onMounted(load);
           />
         </div>
 
+        <v-text-field
+          v-model.number="form.deliveryFee"
+          label="Delivery fee (optional)"
+          type="number"
+          min="0"
+          inputmode="numeric"
+          prefix="Rp"
+          hint="Leave empty to use the branch default"
+          persistent-hint
+          clearable
+        />
+
         <AreaEditorMap v-model="form.polygon" :color="form.color" :overlays="overlays" />
 
         <div class="d-flex ga-2">
@@ -154,7 +170,10 @@ onMounted(load);
             <v-avatar size="20" :style="{ backgroundColor: area.color ?? '#0f766e' }" />
             <div>
               <div class="section-title">{{ area.name }}</div>
-              <div class="muted text-body-2">{{ area.polygon.length }} points</div>
+              <div class="muted text-body-2">
+                {{ area.polygon.length }} points
+                <template v-if="area.delivery_fee !== null"> · {{ formatCurrency(area.delivery_fee) }} ongkir</template>
+              </div>
             </div>
           </div>
           <div class="d-flex">

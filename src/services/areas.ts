@@ -16,6 +16,7 @@ export async function saveArea(payload: {
   name: string;
   color: string | null;
   polygon: AreaPoint[];
+  delivery_fee: number | null;
 }): Promise<Area> {
   const { id, ...values } = payload;
   const query = id

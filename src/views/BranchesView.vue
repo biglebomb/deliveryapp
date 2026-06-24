@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { useBranch } from '../composables/useBranch';
+import { formatCurrency } from '../lib/format';
 import { createBranch, fetchBranches, updateBranch } from '../services/branches';
 import type { Branch } from '../types/models';
 
@@ -11,12 +12,12 @@ const saving = ref(false);
 const error = ref('');
 const dialog = ref(false);
 const editingId = ref<string | null>(null);
-const form = reactive({ name: '', address: '', phone: '', is_active: true });
+const form = reactive({ name: '', address: '', phone: '', delivery_fee: 0, is_active: true });
 
 const headers = [
   { title: 'Branch', key: 'name' },
   { title: 'Address', key: 'address' },
-  { title: 'Phone', key: 'phone', width: '140px' },
+  { title: 'Delivery fee', key: 'delivery_fee', width: '130px' },
   { title: 'Status', key: 'is_active', width: '110px' },
   { title: '', key: 'actions', sortable: false, width: '90px' }
 ];
@@ -35,7 +36,7 @@ async function load() {
 
 function openAdd() {
   editingId.value = null;
-  Object.assign(form, { name: '', address: '', phone: '', is_active: true });
+  Object.assign(form, { name: '', address: '', phone: '', delivery_fee: 0, is_active: true });
   error.value = '';
   dialog.value = true;
 }
@@ -46,6 +47,7 @@ function openEdit(branch: Branch) {
     name: branch.name,
     address: branch.address ?? '',
     phone: branch.phone ?? '',
+    delivery_fee: Number(branch.delivery_fee ?? 0),
     is_active: branch.is_active
   });
   error.value = '';
@@ -63,7 +65,8 @@ async function submit() {
     const values = {
       name: form.name.trim(),
       address: form.address.trim() || null,
-      phone: form.phone.trim() || null
+      phone: form.phone.trim() || null,
+      delivery_fee: Number(form.delivery_fee || 0)
     };
     if (editingId.value) {
       await updateBranch(editingId.value, { ...values, is_active: form.is_active });
@@ -112,8 +115,8 @@ onMounted(load);
         <template #item.address="{ item }">
           <span class="muted">{{ item.address || '—' }}</span>
         </template>
-        <template #item.phone="{ item }">
-          <span class="muted">{{ item.phone || '—' }}</span>
+        <template #item.delivery_fee="{ item }">
+          <span class="muted">{{ formatCurrency(item.delivery_fee) }}</span>
         </template>
         <template #item.is_active="{ item }">
           <v-chip size="x-small" :color="item.is_active ? 'success' : 'default'" variant="tonal">
@@ -137,6 +140,16 @@ onMounted(load);
           <v-text-field v-model="form.name" label="Name" required hide-details />
           <v-text-field v-model="form.address" label="Address (optional)" hide-details />
           <v-text-field v-model="form.phone" label="Phone (optional)" inputmode="tel" hide-details />
+          <v-text-field
+            v-model.number="form.delivery_fee"
+            label="Default delivery fee"
+            type="number"
+            min="0"
+            inputmode="numeric"
+            prefix="Rp"
+            hint="Used when an order's area has no fee of its own"
+            persistent-hint
+          />
           <v-switch v-if="editingId" v-model="form.is_active" color="primary" label="Active" hide-details />
         </div>
         <div class="d-flex ga-2 justify-end mt-4">

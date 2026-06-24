@@ -282,6 +282,10 @@ onMounted(load);
                 </span>
                 <span class="font-weight-medium">{{ formatCurrency(item.subtotal) }}</span>
               </div>
+              <div v-if="Number(ordersById.get(stop.id)?.delivery_fee) > 0" class="d-flex justify-space-between text-body-2">
+                <span class="muted">Delivery fee</span>
+                <span class="font-weight-medium">{{ formatCurrency(ordersById.get(stop.id)!.delivery_fee) }}</span>
+              </div>
               <div v-if="ordersById.get(stop.id)?.delivery_notes" class="muted text-body-2">
                 {{ ordersById.get(stop.id)?.delivery_notes }}
               </div>

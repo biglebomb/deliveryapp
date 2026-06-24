@@ -47,6 +47,7 @@ export function buildOrderSummary(order: Order): string {
   return [
     `Pesanan ${customer}`,
     items || 'Tidak ada item',
+    Number(order.delivery_fee) > 0 ? `Ongkir: ${formatCurrency(order.delivery_fee)}` : '',
     `Total: ${formatCurrency(order.total_amount)}`,
     `Status: ${order.status}`,
     order.delivery_notes ? `Catatan: ${order.delivery_notes}` : ''
