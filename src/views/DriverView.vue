@@ -32,12 +32,20 @@ const methodLabels: Record<PaymentMethod, string> = {
 const methodItems = paymentMethods.map((value) => ({ value, title: methodLabels[value] }));
 
 const ordersById = computed(() => new Map(orders.value.map((o) => [o.id, o])));
+// Delivered orders stay in the list (shown as done) but are excluded from the map,
+// route, and optimize so navigation only ever covers what's left.
+const activeOrders = computed(() => orders.value.filter((o) => o.status !== 'delivered'));
+const doneOrders = computed(() => orders.value.filter((o) => o.status === 'delivered'));
 const withCoords = computed<RouteStop[]>(() =>
-  orders.value
+  activeOrders.value
     .filter((o) => o.latitude !== null && o.longitude !== null)
     .map((o) => ({ id: o.id, lat: o.latitude as number, lng: o.longitude as number, label: o.customer?.name ?? 'Customer' }))
 );
-const missingCoordsCount = computed(() => orders.value.filter((o) => o.latitude === null).length);
+const missingCoordsCount = computed(() => activeOrders.value.filter((o) => o.latitude === null).length);
+
+function itemsLine(order: Order): string {
+  return (order.order_items ?? []).map((i) => `${i.quantity}× ${i.product_name_snapshot}`).join(', ');
+}
 
 // Optimizing only helps with 3+ stops that are actually spread out — for 1–2, or a
 // tight cluster, the driver already knows the order.
@@ -145,14 +153,13 @@ async function optimize() {
 
 async function setStatus(id: string, status: OrderStatus) {
   await updateOrderStatus(id, status);
-  // Update locally instead of refetching — a full reload re-runs the map's draw()
-  // (and can remount it, a billable Maps load) on every action.
-  if (status === 'delivered') {
-    // Delivered orders leave the active list; drop the card without a refetch.
-    orders.value = orders.value.filter((o) => o.id !== id);
-  } else {
-    const order = ordersById.value.get(id);
-    if (order) order.status = status;
+  // Update locally instead of refetching, so the map isn't re-rendered. Delivered
+  // orders stay in the list (rendered as done) and just drop out of the map/route
+  // via the activeOrders filter.
+  const order = ordersById.value.get(id);
+  if (order) {
+    order.status = status;
+    if (status === 'delivered') order.delivered_at = new Date().toISOString();
   }
 }
 
@@ -324,7 +331,22 @@ onMounted(load);
         </SwipeToComplete>
       </div>
 
-      <v-card v-else class="list-card pa-6 text-center">
+      <!-- Completed today: visible but de-emphasized and unactionable -->
+      <div v-if="doneOrders.length" class="stack">
+        <div class="muted text-body-2 mt-2">Selesai hari ini · {{ doneOrders.length }}</div>
+        <v-card v-for="order in doneOrders" :key="order.id" class="list-card pa-3" style="opacity: 0.55">
+          <div class="d-flex align-center ga-3">
+            <v-icon icon="mdi-check-circle" color="success" />
+            <div class="flex-grow-1" style="min-width: 0">
+              <div class="font-weight-medium" style="text-decoration: line-through">{{ order.customer?.name ?? 'Customer' }}</div>
+              <div class="muted text-body-2" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ itemsLine(order) }}</div>
+            </div>
+            <div class="font-weight-bold flex-shrink-0">{{ formatCurrency(order.total_amount) }}</div>
+          </div>
+        </v-card>
+      </div>
+
+      <v-card v-if="!displayStops.length && !doneOrders.length" class="list-card pa-6 text-center">
         <v-icon icon="mdi-truck-check-outline" size="36" class="mb-2 muted" />
         <div class="section-title">No deliveries assigned</div>
         <div class="muted text-body-2">Orders the admin assigns to you will show here.</div>

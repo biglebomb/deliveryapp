@@ -32,12 +32,21 @@ export async function fetchActiveDeliveries(): Promise<Order[]> {
   return (data ?? []) as Order[];
 }
 
+/** Midnight today in Jakarta (UTC+7, no DST) as a UTC ISO instant. */
+function jakartaTodayStartUtcISO(): string {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+  return new Date(`${today}T00:00:00+07:00`).toISOString();
+}
+
 export async function fetchMyDeliveries(driverId: string): Promise<Order[]> {
+  // Active deliveries, plus orders delivered earlier today so the driver still
+  // sees what they've completed (shown as done, excluded from the map/route).
+  const since = jakartaTodayStartUtcISO();
   const { data, error } = await requireSupabase()
     .from('orders')
     .select(orderSelect)
     .eq('assigned_driver_id', driverId)
-    .in('status', ['preparing', 'delivering'])
+    .or(`status.in.(preparing,delivering),and(status.eq.delivered,delivered_at.gte.${since})`)
     .order('order_date', { ascending: true });
   if (error) throw error;
   return (data ?? []) as Order[];
