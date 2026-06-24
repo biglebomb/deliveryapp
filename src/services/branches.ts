@@ -8,6 +8,24 @@ export async function fetchBranches(): Promise<Branch[]> {
   return (data ?? []) as Branch[];
 }
 
+export async function createBranch(input: {
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+}): Promise<Branch> {
+  const { data, error } = await requireSupabase().from('branches').insert(input).select().single();
+  if (error) throw error;
+  return data as Branch;
+}
+
+export async function updateBranch(
+  id: string,
+  values: Partial<Pick<Branch, 'name' | 'address' | 'phone' | 'is_active'>>
+): Promise<void> {
+  const { error } = await requireSupabase().from('branches').update(values).eq('id', id);
+  if (error) throw error;
+}
+
 /** product_id -> overridden price for the given branch (active branch by default). */
 export async function fetchBranchProductPrices(
   branchId = getActiveBranchId()

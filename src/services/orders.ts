@@ -15,11 +15,17 @@ const orderSelect = `
   order_items(*)
 `;
 
-export async function fetchOrders(includeArchived = false): Promise<Order[]> {
+/**
+ * Fetch orders. By default scopes to the active branch; pass branchScope = null
+ * to fetch across all branches (owner reports), or a specific branch id.
+ */
+export async function fetchOrders(
+  includeArchived = false,
+  branchScope: string | null = getActiveBranchId()
+): Promise<Order[]> {
   let query = requireSupabase().from('orders').select(orderSelect);
   if (!includeArchived) query = query.is('archived_at', null);
-  const branchId = getActiveBranchId();
-  if (branchId) query = query.eq('branch_id', branchId);
+  if (branchScope) query = query.eq('branch_id', branchScope);
   const { data, error } = await query.order('order_date', { ascending: false });
   if (error) throw error;
   return (data ?? []) as Order[];

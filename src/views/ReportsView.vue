@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
+import { useAuth } from '../composables/useAuth';
+import { useBranch } from '../composables/useBranch';
 import { formatCurrency, formatDateTime } from '../lib/format';
 import { fetchOrders, reopenOrder, updatePayment } from '../services/orders';
 import type { Order, PaymentMethod } from '../types/models';
@@ -9,11 +11,20 @@ import { paymentMethods } from '../types/models';
 
 const router = useRouter();
 const { smAndDown } = useDisplay();
+const auth = useAuth();
+const branchCtx = useBranch();
 
 const orders = ref<Order[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
+
+// Owner can scope reports to all branches or one; managers see only their own.
+const branchFilter = ref<string>('all');
+const branchOptions = computed(() => [
+  { value: 'all', title: 'All branches' },
+  ...branchCtx.branches.value.map((b) => ({ value: b.id, title: b.name }))
+]);
 
 const from = ref(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date()));
 const to = ref(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date()));
@@ -29,9 +40,32 @@ const methodItems = paymentMethods.map((m) => ({ value: m, title: methodLabels[m
 const filtered = computed(() =>
   orders.value.filter((o) => {
     const key = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date(o.order_date));
-    return key >= from.value && key <= to.value;
+    const inRange = key >= from.value && key <= to.value;
+    const inBranch = branchFilter.value === 'all' || o.branch_id === branchFilter.value;
+    return inRange && inBranch;
   })
 );
+
+// Per-branch totals (owner, "All branches" view).
+const branchBreakdown = computed(() => {
+  const map = new Map<string, { name: string; sales: number; paid: number; delivered: number }>();
+  for (const o of filtered.value) {
+    const name = branchCtx.branches.value.find((b) => b.id === o.branch_id)?.name ?? 'Branch';
+    const r = map.get(o.branch_id) ?? { name, sales: 0, paid: 0, delivered: 0 };
+    r.sales += Number(o.total_amount);
+    if (o.payment_status === 'paid') r.paid += Number(o.total_amount);
+    if (o.status === 'delivered') r.delivered += 1;
+    map.set(o.branch_id, r);
+  }
+  return Array.from(map.values()).sort((a, b) => b.sales - a.sales);
+});
+
+const branchBreakdownHeaders = [
+  { title: 'Branch', key: 'name' },
+  { title: 'Sales', key: 'sales', align: 'end' as const, width: '130px' },
+  { title: 'Paid', key: 'paid', align: 'end' as const, width: '130px' },
+  { title: 'Delivered', key: 'delivered', align: 'end' as const, width: '110px' }
+];
 
 const totalSales = computed(() => filtered.value.reduce((s, o) => s + Number(o.total_amount), 0));
 const paidSales = computed(() => filtered.value.filter((o) => o.payment_status === 'paid').reduce((s, o) => s + Number(o.total_amount), 0));
@@ -99,7 +133,13 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    orders.value = await fetchOrders(true);
+    if (auth.isOwner.value) {
+      // HQ: pull every branch so the owner can compare and aggregate.
+      await branchCtx.loadBranches();
+      orders.value = await fetchOrders(true, null);
+    } else {
+      orders.value = await fetchOrders(true);
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load reports.';
   } finally {
@@ -146,12 +186,39 @@ onMounted(load);
 
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
 
-    <!-- Date range -->
+    <!-- Date range + (owner) branch scope -->
     <v-card class="list-card pa-4 mb-4">
       <div class="grid cols-2">
         <v-text-field v-model="from" type="date" label="From" hide-details />
         <v-text-field v-model="to" type="date" label="To" hide-details />
       </div>
+      <v-select
+        v-if="auth.isOwner.value"
+        v-model="branchFilter"
+        :items="branchOptions"
+        label="Branch"
+        prepend-inner-icon="mdi-store-outline"
+        class="mt-3"
+        hide-details
+      />
+    </v-card>
+
+    <!-- Per-branch breakdown (owner, all branches) -->
+    <v-card v-if="auth.isOwner.value && branchFilter === 'all' && branchBreakdown.length > 1" class="list-card mb-4">
+      <div class="section-title pa-4 pb-2">By branch</div>
+      <v-data-table
+        :headers="branchBreakdownHeaders"
+        :items="branchBreakdown"
+        :loading="loading"
+        density="comfortable"
+        item-value="name"
+        hide-default-footer
+      >
+        <template #item.sales="{ item }">
+          <span class="font-weight-bold">{{ formatCurrency(item.sales) }}</span>
+        </template>
+        <template #item.paid="{ item }">{{ formatCurrency(item.paid) }}</template>
+      </v-data-table>
     </v-card>
 
     <!-- Metrics -->

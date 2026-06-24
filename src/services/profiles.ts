@@ -1,21 +1,39 @@
+import { getActiveBranchId } from '../lib/branchContext';
 import { requireSupabase } from '../lib/supabase';
-import type { Profile } from '../types/models';
+import type { Profile, UserRole } from '../types/models';
 
+/** Drivers in the active branch (used for delivery assignment). */
 export async function fetchDrivers(): Promise<Profile[]> {
-  const { data, error } = await requireSupabase()
-    .from('profiles')
-    .select('*')
-    .eq('role', 'driver')
-    .order('name');
+  let query = requireSupabase().from('profiles').select('*').eq('role', 'driver').order('name');
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Profile[];
 }
 
-export async function createDriver(input: {
+/** Branch managers + drivers in the active branch (the team page). */
+export async function fetchStaff(): Promise<Profile[]> {
+  let query = requireSupabase()
+    .from('profiles')
+    .select('*')
+    .in('role', ['admin', 'driver'])
+    .order('role')
+    .order('name');
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as Profile[];
+}
+
+export async function createStaff(input: {
   email: string;
   password: string;
   name: string;
   phone?: string | null;
+  role?: Extract<UserRole, 'admin' | 'driver'>;
+  branch_id?: string;
 }): Promise<void> {
   const { data, error } = await requireSupabase().functions.invoke('create-driver', { body: input });
   if (error) {

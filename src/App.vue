@@ -41,9 +41,13 @@ const menuItems = [
   { title: 'Products', value: '/products', icon: 'mdi-bottle-tonic-outline' },
   { title: 'Packaging', value: '/packaging', icon: 'mdi-package-variant' },
   { title: 'Areas', value: '/areas', icon: 'mdi-vector-polygon' },
-  { title: 'Drivers', value: '/drivers', icon: 'mdi-account-hard-hat' },
+  { title: 'Team', value: '/drivers', icon: 'mdi-account-hard-hat' },
+  { title: 'Branches', value: '/branches', icon: 'mdi-store-outline', ownerOnly: true },
   { title: 'Reports', value: '/reports', icon: 'mdi-chart-bar' }
 ];
+
+// Branches management is HQ-only; everything else is shared with branch managers.
+const visibleMenuItems = computed(() => menuItems.filter((item) => !item.ownerOnly || auth.isOwner.value));
 
 const navItems = [
   { title: 'Home', value: '/', icon: 'mdi-home-outline' },
@@ -139,7 +143,7 @@ async function signOut() {
 
       <v-list nav density="comfortable">
         <v-list-item
-          v-for="item in menuItems"
+          v-for="item in visibleMenuItems"
           :key="item.value"
           :active="navValue === item.value"
           :prepend-icon="item.icon"

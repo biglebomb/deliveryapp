@@ -19,6 +19,7 @@ export const router = createRouter({
     { path: '/areas', name: 'areas', component: () => import('../views/AreasView.vue') },
     { path: '/reports', name: 'reports', component: () => import('../views/ReportsView.vue') },
     { path: '/drivers', name: 'drivers', component: () => import('../views/DriversView.vue') },
+    { path: '/branches', name: 'branches', component: () => import('../views/BranchesView.vue'), meta: { ownerOnly: true } },
     { path: '/driver', name: 'driver', component: () => import('../views/DriverView.vue') }
   ],
   scrollBehavior: () => ({ top: 0 })
@@ -41,6 +42,9 @@ router.beforeEach(async (to) => {
   // Drivers can only reach their own route; admins use the full app (not the driver view).
   if (!auth.isAdmin.value && to.name !== 'driver') return '/driver';
   if (auth.isAdmin.value && to.name === 'driver') return '/';
+
+  // HQ-only routes (e.g. Branches) are owner-only; branch managers are redirected home.
+  if (to.meta.ownerOnly && !auth.isOwner.value) return '/';
 
   return true;
 });
