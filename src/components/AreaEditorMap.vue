@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
-import { mapCenter } from '../lib/branchContext';
+import { branchCenterRef, mapCenter } from '../lib/branchContext';
 import { loadGoogleMaps } from '../lib/maps';
 import type { AreaPoint } from '../types/models';
 
@@ -153,6 +153,14 @@ watch(path, (next) => {
 });
 
 watch(() => props.overlays, renderOverlays, { deep: true });
+
+// If the branch center resolves after the map mounts (cold load), recenter —
+// but only while nothing is drawn or framed yet, so we don't yank the view.
+watch(branchCenterRef(), (center) => {
+  if (map && center && path.value.length === 0 && !props.overlays.length) {
+    map.setCenter(center);
+  }
+});
 </script>
 
 <template>

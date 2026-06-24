@@ -17,6 +17,11 @@ export function setActiveBranchCenter(center: { lat: number; lng: number } | nul
   activeBranchCenter.value = center;
 }
 
+/** Reactive ref to the active branch center (for maps that recenter when it arrives). */
+export function branchCenterRef() {
+  return activeBranchCenter;
+}
+
 /** Default center for maps — the active branch, falling back to Jakarta. */
 export function mapCenter(): { lat: number; lng: number } {
   return activeBranchCenter.value ?? DEFAULT_CENTER;

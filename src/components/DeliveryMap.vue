@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { mapCenter } from '../lib/branchContext';
+import { branchCenterRef, mapCenter } from '../lib/branchContext';
 import { loadGoogleMaps } from '../lib/maps';
 import type { GeoPoint, RouteStop } from '../lib/route';
 
@@ -160,6 +160,11 @@ onBeforeUnmount(() => {
 });
 
 watch(() => [props.stops, props.start, props.directions], draw, { deep: true });
+
+// Recenter if the branch center resolves after mount, while there's nothing to frame.
+watch(branchCenterRef(), (center) => {
+  if (map && center && !props.stops.length && !props.start) map.setCenter(center);
+});
 </script>
 
 <template>
