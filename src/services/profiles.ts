@@ -55,3 +55,20 @@ export async function setDriverActive(id: string, is_active: boolean): Promise<v
   const { error } = await requireSupabase().from('profiles').update({ is_active }).eq('id', id);
   if (error) throw error;
 }
+
+export async function deleteStaff(id: string): Promise<void> {
+  const { data, error } = await requireSupabase().functions.invoke('delete-staff', { body: { id } });
+  if (error) {
+    let message = error.message;
+    try {
+      const body = await (error as { context?: { json?: () => Promise<{ error?: string }> } }).context?.json?.();
+      if (body?.error) message = body.error;
+    } catch {
+      // keep the default message
+    }
+    throw new Error(message);
+  }
+  if (data && typeof data === 'object' && 'error' in data && data.error) {
+    throw new Error(String(data.error));
+  }
+}

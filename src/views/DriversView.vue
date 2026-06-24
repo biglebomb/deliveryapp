@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { useBranch } from '../composables/useBranch';
-import { createStaff, fetchStaff, setDriverActive } from '../services/profiles';
+import { createStaff, deleteStaff, fetchStaff, setDriverActive } from '../services/profiles';
 import type { Profile } from '../types/models';
 
 const auth = useAuth();
@@ -31,7 +31,7 @@ const headers = computed(() => [
   ...(auth.isOwner.value ? [{ title: 'Branch', key: 'branch_id', width: '140px' }] : []),
   { title: 'Phone', key: 'phone' },
   { title: 'Status', key: 'is_active', width: '110px' },
-  { title: '', key: 'actions', sortable: false, width: '130px' }
+  { title: '', key: 'actions', sortable: false, width: '180px' }
 ]);
 
 function branchName(id: string): string {
@@ -94,6 +94,24 @@ async function toggleActive(member: Profile) {
   await load();
 }
 
+const memberToDelete = ref<Profile | null>(null);
+const deleting = ref(false);
+
+async function confirmDelete() {
+  if (!memberToDelete.value) return;
+  deleting.value = true;
+  error.value = '';
+  try {
+    await deleteStaff(memberToDelete.value.id);
+    memberToDelete.value = null;
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not delete member.';
+  } finally {
+    deleting.value = false;
+  }
+}
+
 onMounted(() => {
   void branchCtx.loadBranches();
   void load();
@@ -150,14 +168,23 @@ onMounted(() => {
         </template>
 
         <template #item.actions="{ item }">
-          <v-btn
-            :color="item.is_active ? 'error' : 'success'"
-            variant="tonal"
-            size="x-small"
-            @click="toggleActive(item)"
-          >
-            {{ item.is_active ? 'Deactivate' : 'Activate' }}
-          </v-btn>
+          <div class="d-flex ga-1 justify-end">
+            <v-btn
+              :color="item.is_active ? 'error' : 'success'"
+              variant="tonal"
+              size="x-small"
+              @click="toggleActive(item)"
+            >
+              {{ item.is_active ? 'Deactivate' : 'Activate' }}
+            </v-btn>
+            <v-btn
+              icon="mdi-delete-outline"
+              size="x-small"
+              variant="text"
+              color="error"
+              @click="memberToDelete = item"
+            />
+          </div>
         </template>
 
         <template #no-data>
@@ -165,6 +192,21 @@ onMounted(() => {
         </template>
       </v-data-table>
     </v-card>
+
+    <!-- Delete confirm -->
+    <v-dialog :model-value="memberToDelete !== null" max-width="420" @update:model-value="memberToDelete = null">
+      <v-card class="pa-4">
+        <div class="section-title mb-2">Delete team member?</div>
+        <p class="mb-4">
+          Permanently remove <strong>{{ memberToDelete?.name || 'this member' }}</strong> and their login.
+          Past orders keep their history. This can't be undone.
+        </p>
+        <div class="d-flex ga-2 justify-end">
+          <v-btn variant="text" :disabled="deleting" @click="memberToDelete = null">Cancel</v-btn>
+          <v-btn color="error" :loading="deleting" prepend-icon="mdi-delete" @click="confirmDelete">Delete</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
 
     <!-- Add member dialog -->
     <v-dialog v-model="dialog" max-width="440">
