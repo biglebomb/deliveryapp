@@ -3,12 +3,14 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { useAuth } from './composables/useAuth';
+import { useBranch } from './composables/useBranch';
 import { useOnline } from './composables/useOnline';
 import { countPendingInbox } from './services/inbox';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuth();
+const { branches, current: currentBranch, activeBranchId, canSwitch, loadBranches, switchBranch } = useBranch();
 const { online } = useOnline();
 const { mdAndUp } = useDisplay();
 
@@ -56,6 +58,20 @@ onMounted(async () => {
   void loadPending();
 });
 
+// Load the branch list once the user is authenticated (for the owner's switcher
+// and the current-branch label).
+watch(
+  () => auth.isAuthenticated.value,
+  (authed) => {
+    if (authed) void loadBranches().catch(() => {});
+  },
+  { immediate: true }
+);
+
+function onBranchChange(id: string) {
+  switchBranch(id);
+}
+
 watch(drawer, (open) => {
   if (open) void loadPending();
 });
@@ -97,6 +113,28 @@ async function signOut() {
         <v-icon icon="mdi-bottle-tonic" color="primary" size="22" />
         <span class="font-weight-bold" style="font-size: 15px">Milk Delivery</span>
       </div>
+
+      <!-- Branch: owner can switch; staff see their branch as a label. -->
+      <div class="px-3 py-2">
+        <v-select
+          v-if="canSwitch"
+          :model-value="activeBranchId"
+          :items="branches"
+          item-title="name"
+          item-value="id"
+          label="Branch"
+          density="compact"
+          variant="outlined"
+          hide-details
+          prepend-inner-icon="mdi-store-outline"
+          @update:model-value="onBranchChange"
+        />
+        <div v-else-if="currentBranch" class="d-flex align-center ga-2 px-1 py-1">
+          <v-icon icon="mdi-store-outline" size="18" />
+          <span class="text-body-2 font-weight-medium">{{ currentBranch.name }}</span>
+        </div>
+      </div>
+
       <v-divider v-if="mdAndUp" class="mb-1 mt-2" />
 
       <v-list nav density="comfortable">
@@ -118,7 +156,8 @@ async function signOut() {
     </v-navigation-drawer>
 
     <v-main>
-      <router-view />
+      <!-- Re-key on branch change so the active view refetches for the new branch. -->
+      <router-view :key="activeBranchId ?? 'no-branch'" />
     </v-main>
 
     <!-- Bottom nav: mobile only -->

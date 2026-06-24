@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import { computed, ref } from 'vue';
+import { getActiveBranchId, setActiveBranchId } from '../lib/branchContext';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { Profile } from '../types/models';
 
@@ -15,6 +16,22 @@ async function loadProfile() {
   }
   const { data } = await supabase.from('profiles').select('*').eq('id', session.value.user.id).single();
   profile.value = (data as Profile) ?? null;
+  syncActiveBranch();
+}
+
+// Set the operating branch from the signed-in profile. The owner may have a
+// stored choice (they can switch); staff are always pinned to their own branch.
+function syncActiveBranch() {
+  const p = profile.value;
+  if (!p) {
+    setActiveBranchId(null);
+    return;
+  }
+  if (p.role === 'owner') {
+    setActiveBranchId(getActiveBranchId() ?? p.branch_id);
+  } else {
+    setActiveBranchId(p.branch_id);
+  }
 }
 
 async function runInit() {
@@ -52,9 +69,12 @@ export function useAuth() {
     if (!supabase) return;
     await supabase.auth.signOut();
     profile.value = null;
+    setActiveBranchId(null);
   }
 
   const role = computed(() => profile.value?.role ?? null);
+  // Owner has the full admin app plus cross-branch switching.
+  const isAdmin = computed(() => role.value === 'admin' || role.value === 'owner');
 
   return {
     init,
@@ -65,9 +85,10 @@ export function useAuth() {
     role,
     loading,
     isAuthenticated: computed(() => Boolean(session.value)),
-    isAdmin: computed(() => role.value === 'admin'),
-    // Anyone authenticated who is not an admin is treated as a driver (least privilege).
-    isDriver: computed(() => Boolean(session.value) && role.value !== 'admin'),
+    isAdmin,
+    isOwner: computed(() => role.value === 'owner'),
+    // Anyone authenticated who is not admin/owner is treated as a driver (least privilege).
+    isDriver: computed(() => Boolean(session.value) && !isAdmin.value),
     isSupabaseConfigured
   };
 }

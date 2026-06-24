@@ -1,4 +1,6 @@
+import { requireBranchId } from '../lib/branchContext';
 import { requireSupabase } from '../lib/supabase';
+import { fetchBranchProductPrices, setBranchProductPrice } from './branches';
 import type { Product } from '../types/models';
 
 export async function fetchProducts(includeInactive = true): Promise<Product[]> {
@@ -8,21 +10,39 @@ export async function fetchProducts(includeInactive = true): Promise<Product[]> 
   }
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as Product[];
+  const products = (data ?? []) as Product[];
+  // The catalog is shared; price is per-branch. Overlay the active branch's
+  // override, falling back to the catalog base price when there's none.
+  const overrides = await fetchBranchProductPrices();
+  for (const p of products) {
+    const override = overrides.get(p.id);
+    if (override !== undefined) p.price = override;
+  }
+  return products;
 }
 
 export async function saveProduct(payload: Partial<Product> & Pick<Product, 'name' | 'price'>): Promise<Product> {
-  const { id, created_at, updated_at, ...values } = payload;
+  const { id, price, created_at, updated_at, ...catalog } = payload;
   void created_at;
   void updated_at;
 
-  const query = id
-    ? requireSupabase().from('products').update(values).eq('id', id).select().single()
-    : requireSupabase().from('products').insert(values).select().single();
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data as Product;
+  const client = requireSupabase();
+  const branchId = requireBranchId();
+  let product: Product;
+  if (id) {
+    // Catalog fields are global; price is stored per-branch as an override.
+    const { data, error } = await client.from('products').update(catalog).eq('id', id).select().single();
+    if (error) throw error;
+    product = data as Product;
+  } else {
+    // New product: the base price seeds branches that have no override yet.
+    const { data, error } = await client.from('products').insert({ ...catalog, price }).select().single();
+    if (error) throw error;
+    product = data as Product;
+  }
+  await setBranchProductPrice(product.id, price, branchId);
+  product.price = price;
+  return product;
 }
 
 export async function deleteProduct(id: string): Promise<void> {

@@ -1,3 +1,4 @@
+import { getActiveBranchId, requireBranchId } from '../lib/branchContext';
 import { requireSupabase } from '../lib/supabase';
 import { assignArea } from '../lib/route';
 import { fetchAreas } from './areas';
@@ -26,6 +27,8 @@ export function itemsTotal(items: SubscriptionItem[]): number {
 export async function fetchSubscriptions(includeInactive = true): Promise<Subscription[]> {
   let query = requireSupabase().from('subscriptions').select(subscriptionSelect);
   if (!includeInactive) query = query.eq('status', 'active');
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as Subscription[];
@@ -57,7 +60,7 @@ export async function saveSubscription(input: {
     const { error } = await client.from('subscriptions').update(row).eq('id', input.id);
     if (error) throw error;
   } else {
-    const { error } = await client.from('subscriptions').insert(row);
+    const { error } = await client.from('subscriptions').insert({ ...row, branch_id: requireBranchId() });
     if (error) throw error;
   }
 }
@@ -105,11 +108,13 @@ export async function generateTodaysSubscriptionOrders(): Promise<number> {
   const client = requireSupabase();
   const today = jakartaToday();
   const weekday = jakartaWeekday();
+  // Generate only for the active branch, so areas resolve correctly and orders
+  // are stamped with this branch. Each branch generates when its app is loaded.
+  const branchId = getActiveBranchId();
 
-  const { data: subs, error } = await client
-    .from('subscriptions')
-    .select(subscriptionSelect)
-    .eq('status', 'active');
+  let subsQuery = client.from('subscriptions').select(subscriptionSelect).eq('status', 'active');
+  if (branchId) subsQuery = subsQuery.eq('branch_id', branchId);
+  const { data: subs, error } = await subsQuery;
   if (error) throw error;
 
   const due = (subs ?? []).filter((s: Subscription) => {
@@ -145,7 +150,8 @@ export async function generateTodaysSubscriptionOrders(): Promise<number> {
         latitude: lat,
         longitude: lng,
         delivery_area: area,
-        subscription_id: sub.id
+        subscription_id: sub.id,
+        branch_id: sub.branch_id
       })
       .select('id')
       .single();

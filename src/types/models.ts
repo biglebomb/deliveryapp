@@ -1,7 +1,17 @@
 export type OrderStatus = 'pending' | 'preparing' | 'delivering' | 'delivered' | 'cancelled';
 export type PaymentStatus = 'unpaid' | 'paid';
 export type PaymentMethod = 'cash' | 'qris' | 'transfer' | 'other';
-export type UserRole = 'admin' | 'driver';
+export type UserRole = 'owner' | 'admin' | 'driver';
+
+export interface Branch {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Profile {
   id: string;
@@ -9,6 +19,7 @@ export interface Profile {
   role: UserRole;
   phone: string | null;
   is_active: boolean;
+  branch_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +42,7 @@ export interface Customer {
   notes: string | null;
   latitude: number | null;
   longitude: number | null;
+  branch_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -74,6 +86,7 @@ export interface Order {
   archived_at: string | null;
   delivered_at: string | null;
   paid_at: string | null;
+  branch_id: string;
   created_at: string;
   updated_at: string;
   customer?: Customer;
@@ -111,6 +124,7 @@ export interface Subscription {
   status: SubscriptionStatus;
   start_date: string;
   last_generated_date: string | null;
+  branch_id: string;
   created_at: string;
   updated_at: string;
   customer?: Customer;
@@ -140,6 +154,7 @@ export interface InboxItem {
   longitude: number | null;
   sender: string | null;
   status: InboxStatus;
+  branch_id: string;
   created_at: string;
 }
 
@@ -153,6 +168,7 @@ export interface Area {
   name: string;
   color: string | null;
   polygon: AreaPoint[];
+  branch_id: string;
   created_at: string;
   updated_at: string;
 }

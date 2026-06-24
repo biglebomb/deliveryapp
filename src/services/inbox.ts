@@ -1,21 +1,28 @@
+import { getActiveBranchId } from '../lib/branchContext';
 import { requireSupabase } from '../lib/supabase';
 import type { InboxItem, InboxStatus } from '../types/models';
 
 export async function fetchInbox(status: InboxStatus = 'pending'): Promise<InboxItem[]> {
-  const { data, error } = await requireSupabase()
+  let query = requireSupabase()
     .from('order_inbox')
     .select('*')
     .eq('status', status)
     .order('created_at', { ascending: false });
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as InboxItem[];
 }
 
 export async function countPendingInbox(): Promise<number> {
-  const { count, error } = await requireSupabase()
+  let query = requireSupabase()
     .from('order_inbox')
     .select('*', { count: 'exact', head: true })
     .eq('status', 'pending');
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
+  const { count, error } = await query;
   if (error) throw error;
   return count ?? 0;
 }

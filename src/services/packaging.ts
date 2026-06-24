@@ -1,4 +1,6 @@
+import { requireBranchId } from '../lib/branchContext';
 import { requireSupabase } from '../lib/supabase';
+import { fetchBranchPackagingPrices, setBranchPackagingPrice } from './branches';
 import type { PackagingOption } from '../types/models';
 
 export async function fetchPackagingOptions(includeInactive = true): Promise<PackagingOption[]> {
@@ -13,29 +15,43 @@ export async function fetchPackagingOptions(includeInactive = true): Promise<Pac
   }
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as PackagingOption[];
+  const options = (data ?? []) as PackagingOption[];
+  // Shared catalog, per-branch price: overlay the active branch's override.
+  const overrides = await fetchBranchPackagingPrices();
+  for (const o of options) {
+    const override = overrides.get(o.id);
+    if (override !== undefined) o.price = override;
+  }
+  return options;
 }
 
 export async function savePackagingOption(
   payload: Partial<PackagingOption> & Pick<PackagingOption, 'name' | 'price'>
 ): Promise<PackagingOption> {
-  const { id, created_at, updated_at, ...values } = payload;
+  const { id, price, created_at, updated_at, ...values } = payload;
   void created_at;
   void updated_at;
 
   const client = requireSupabase();
-  // Only one default at a time.
+  const branchId = requireBranchId();
+  // Only one default at a time (default is a global catalog property).
   if (values.is_default) {
     await client.from('packaging_options').update({ is_default: false }).neq('id', id ?? '');
   }
 
-  const query = id
-    ? client.from('packaging_options').update(values).eq('id', id).select().single()
-    : client.from('packaging_options').insert(values).select().single();
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data as PackagingOption;
+  let option: PackagingOption;
+  if (id) {
+    const { data, error } = await client.from('packaging_options').update(values).eq('id', id).select().single();
+    if (error) throw error;
+    option = data as PackagingOption;
+  } else {
+    const { data, error } = await client.from('packaging_options').insert({ ...values, price }).select().single();
+    if (error) throw error;
+    option = data as PackagingOption;
+  }
+  await setBranchPackagingPrice(option.id, price, branchId);
+  option.price = price;
+  return option;
 }
 
 export async function deletePackagingOption(id: string): Promise<void> {

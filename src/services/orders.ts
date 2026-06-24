@@ -1,3 +1,4 @@
+import { getActiveBranchId, requireBranchId } from '../lib/branchContext';
 import { requireSupabase } from '../lib/supabase';
 import type {
   Customer,
@@ -17,17 +18,21 @@ const orderSelect = `
 export async function fetchOrders(includeArchived = false): Promise<Order[]> {
   let query = requireSupabase().from('orders').select(orderSelect);
   if (!includeArchived) query = query.is('archived_at', null);
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
   const { data, error } = await query.order('order_date', { ascending: false });
   if (error) throw error;
   return (data ?? []) as Order[];
 }
 
 export async function fetchActiveDeliveries(): Promise<Order[]> {
-  const { data, error } = await requireSupabase()
+  let query = requireSupabase()
     .from('orders')
     .select(orderSelect)
-    .in('status', ['preparing', 'delivering'])
-    .order('order_date', { ascending: true });
+    .in('status', ['preparing', 'delivering']);
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
+  const { data, error } = await query.order('order_date', { ascending: true });
   if (error) throw error;
   return (data ?? []) as Order[];
 }
@@ -42,12 +47,14 @@ export async function fetchMyDeliveries(driverId: string): Promise<Order[]> {
   // Active deliveries, plus orders delivered earlier today so the driver still
   // sees what they've completed (shown as done, excluded from the map/route).
   const since = jakartaTodayStartUtcISO();
-  const { data, error } = await requireSupabase()
+  let query = requireSupabase()
     .from('orders')
     .select(orderSelect)
     .eq('assigned_driver_id', driverId)
-    .or(`status.in.(preparing,delivering),and(status.eq.delivered,delivered_at.gte.${since})`)
-    .order('order_date', { ascending: true });
+    .or(`status.in.(preparing,delivering),and(status.eq.delivered,delivered_at.gte.${since})`);
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
+  const { data, error } = await query.order('order_date', { ascending: true });
   if (error) throw error;
   return (data ?? []) as Order[];
 }
@@ -79,7 +86,8 @@ export async function createOrder(input: {
       delivery_notes: input.deliveryNotes,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      delivery_area: input.deliveryArea ?? null
+      delivery_area: input.deliveryArea ?? null,
+      branch_id: requireBranchId()
     })
     .select()
     .single();
@@ -118,14 +126,16 @@ export async function updateOrderStatus(id: string, status: OrderStatus): Promis
   if (error) throw error;
 }
 
-/** Archive every delivered, not-yet-archived order. Returns how many were cleared. */
+/** Archive every delivered, not-yet-archived order in the active branch. Returns how many were cleared. */
 export async function archiveDeliveredOrders(): Promise<number> {
-  const { data, error } = await requireSupabase()
+  let query = requireSupabase()
     .from('orders')
     .update({ archived_at: new Date().toISOString() })
     .eq('status', 'delivered')
-    .is('archived_at', null)
-    .select('id');
+    .is('archived_at', null);
+  const branchId = getActiveBranchId();
+  if (branchId) query = query.eq('branch_id', branchId);
+  const { data, error } = await query.select('id');
   if (error) throw error;
   return data?.length ?? 0;
 }
