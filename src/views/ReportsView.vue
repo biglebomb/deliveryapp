@@ -29,8 +29,28 @@ const branchOptions = computed(() => [
   ...branchCtx.branches.value.map((b) => ({ value: b.id, title: b.name }))
 ]);
 
-const from = ref(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date()));
-const to = ref(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date()));
+// Date range as Date objects (driven by v-date-picker); the filter compares
+// YYYY-MM-DD keys derived from the picked calendar day (no timezone shift).
+function toYmd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function todayInJakarta(): Date {
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' })
+    .format(new Date())
+    .split('-')
+    .map(Number);
+  return new Date(y, m - 1, d);
+}
+function dateLabel(d: Date): string {
+  return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(d);
+}
+
+const fromDate = ref<Date>(todayInJakarta());
+const toDate = ref<Date>(todayInJakarta());
+const fromMenu = ref(false);
+const toMenu = ref(false);
+const from = computed(() => toYmd(fromDate.value));
+const to = computed(() => toYmd(toDate.value));
 
 const methodLabels: Record<PaymentMethod, string> = {
   cash: 'Cash',
@@ -262,8 +282,32 @@ onMounted(load);
     <!-- Date range + (owner) branch scope -->
     <v-card class="list-card pa-4 mb-4">
       <div class="grid cols-2">
-        <v-text-field v-model="from" type="date" label="From" hide-details />
-        <v-text-field v-model="to" type="date" label="To" hide-details />
+        <v-menu v-model="fromMenu" :close-on-content-click="false">
+          <template #activator="{ props }">
+            <v-text-field
+              v-bind="props"
+              :model-value="dateLabel(fromDate)"
+              label="From"
+              readonly
+              prepend-inner-icon="mdi-calendar"
+              hide-details
+            />
+          </template>
+          <v-date-picker v-model="fromDate" hide-header @update:model-value="fromMenu = false" />
+        </v-menu>
+        <v-menu v-model="toMenu" :close-on-content-click="false">
+          <template #activator="{ props }">
+            <v-text-field
+              v-bind="props"
+              :model-value="dateLabel(toDate)"
+              label="To"
+              readonly
+              prepend-inner-icon="mdi-calendar"
+              hide-details
+            />
+          </template>
+          <v-date-picker v-model="toDate" hide-header @update:model-value="toMenu = false" />
+        </v-menu>
       </div>
       <v-select
         v-if="auth.isOwner.value"
