@@ -55,6 +55,47 @@ export function nearestNeighborOrder(start: GeoPoint, stops: RouteStop[]): Route
   return ordered;
 }
 
+/**
+ * Round-trip ordering for a run that returns to base: go to the stop farthest
+ * from `base` first, then repeatedly hop to the nearest unvisited stop — so the
+ * far deliveries are cleared early and the run ends near base. Offline fallback
+ * when the Directions API isn't available.
+ */
+export function farthestFirstOrder(base: GeoPoint, stops: RouteStop[]): RouteStop[] {
+  if (stops.length <= 1) return [...stops];
+  const remaining = [...stops];
+
+  // Start at the farthest stop from base.
+  let startIndex = 0;
+  let maxDistance = -Infinity;
+  remaining.forEach((stop, index) => {
+    const distance = haversine(base, stop);
+    if (distance > maxDistance) {
+      maxDistance = distance;
+      startIndex = index;
+    }
+  });
+  const ordered: RouteStop[] = [remaining.splice(startIndex, 1)[0]];
+  let current: GeoPoint = ordered[0];
+
+  // Then nearest-neighbor back toward base.
+  while (remaining.length) {
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+    remaining.forEach((stop, index) => {
+      const distance = haversine(current, stop);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+    const [next] = remaining.splice(bestIndex, 1);
+    ordered.push(next);
+    current = next;
+  }
+  return ordered;
+}
+
 /** Ray-casting point-in-polygon test. Polygon is an ordered ring of points. */
 export function pointInPolygon(point: GeoPoint, polygon: GeoPoint[]): boolean {
   if (!polygon || polygon.length < 3) return false;

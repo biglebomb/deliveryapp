@@ -4,15 +4,32 @@ import { useRouter } from 'vue-router';
 import DeliveryMap from '../components/DeliveryMap.vue';
 import SwipeToComplete from '../components/SwipeToComplete.vue';
 import { useAuth } from '../composables/useAuth';
+import { useBranch } from '../composables/useBranch';
 import { buildOrderSummary, formatCurrency, whatsappUrl } from '../lib/format';
 import { isMapsConfigured, optimizeRoute } from '../lib/maps';
-import { googleMapsDirectionsUrl, haversine, nearestNeighborOrder, type RouteStop } from '../lib/route';
+import {
+  farthestFirstOrder,
+  googleMapsDirectionsUrl,
+  haversine,
+  nearestNeighborOrder,
+  type GeoPoint,
+  type RouteStop
+} from '../lib/route';
 import { fetchMyDeliveries, updateOrderStatus, updateOrderTrackPoint, updatePayment } from '../services/orders';
 import type { Order, OrderStatus, PaymentMethod } from '../types/models';
 import { paymentMethods } from '../types/models';
 
 const auth = useAuth();
+const branchCtx = useBranch();
 const router = useRouter();
+
+// Return point for the round trip — the driver's branch, when its coords are set.
+const branchPoint = computed<GeoPoint | null>(() => {
+  const b = branchCtx.current.value;
+  return b && b.latitude != null && b.longitude != null
+    ? { lat: Number(b.latitude), lng: Number(b.longitude) }
+    : null;
+});
 
 const orders = ref<Order[]>([]);
 const loading = ref(true);
@@ -68,7 +85,10 @@ const displayStops = computed<RouteStop[]>(() => {
   }
   return withCoords.value;
 });
-const routeUrl = computed(() => googleMapsDirectionsUrl(null, displayStops.value));
+// End the navigation at the branch so the driver is routed home after the last stop.
+const routeUrl = computed(() =>
+  googleMapsDirectionsUrl(null, branchPoint.value ? [...displayStops.value, branchPoint.value] : displayStops.value)
+);
 
 /** Indonesian greeting word for the current Jakarta time of day. */
 function timeOfDay(): string {
@@ -104,7 +124,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    orders.value = await fetchMyDeliveries(driverId);
+    [orders.value] = await Promise.all([fetchMyDeliveries(driverId), branchCtx.loadBranches()]);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load your deliveries.';
   } finally {
@@ -130,20 +150,22 @@ async function optimize() {
   notice.value = '';
 
   const gps = await currentPosition();
-  const origin = gps ?? stops[0];
+  const origin = gps ?? branchPoint.value ?? stops[0];
   if (!gps) notice.value = 'Lokasi saat ini tidak tersedia — mulai dari stop pertama.';
+  const returnTo = branchPoint.value;
+  const offline = () => (returnTo ? farthestFirstOrder(returnTo, stops) : nearestNeighborOrder(origin, stops));
 
   try {
     if (isMapsConfigured) {
-      const result = await optimizeRoute(origin, stops);
+      const result = await optimizeRoute(origin, stops, returnTo);
       orderedStops.value = result.orderedStops;
       directions.value = result.directions;
     } else {
-      orderedStops.value = nearestNeighborOrder(origin, stops);
+      orderedStops.value = offline();
       directions.value = null;
     }
   } catch (err) {
-    orderedStops.value = nearestNeighborOrder(origin, stops);
+    orderedStops.value = offline();
     directions.value = null;
     notice.value = `Route service unavailable — used offline ordering. (${err instanceof Error ? err.message : 'error'})`;
   } finally {

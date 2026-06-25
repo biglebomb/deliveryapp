@@ -44,12 +44,35 @@ export interface OptimizedRoute {
 
 /**
  * Real road-distance route optimization via the Directions API.
- * Uses the farthest stop from `start` as the destination and optimizes the
- * remaining stops as waypoints — a clean open path (no forced return to base).
+ *
+ * When `returnTo` is given (e.g. the branch), it's a round trip: every stop is
+ * an optimized waypoint and the route ends back at `returnTo`, so the run clears
+ * the far stops and finishes near base. Without it, the farthest stop becomes
+ * the destination — an open path with no forced return.
  */
-export async function optimizeRoute(start: GeoPoint, stops: RouteStop[]): Promise<OptimizedRoute> {
+export async function optimizeRoute(
+  start: GeoPoint,
+  stops: RouteStop[],
+  returnTo?: GeoPoint | null
+): Promise<OptimizedRoute> {
   const maps = await loadGoogleMaps();
   const service = new maps.DirectionsService();
+
+  if (returnTo) {
+    const waypoints = stops.map((stop) => ({
+      location: { lat: stop.lat, lng: stop.lng },
+      stopover: true
+    }));
+    const directions = await service.route({
+      origin: { lat: start.lat, lng: start.lng },
+      destination: { lat: returnTo.lat, lng: returnTo.lng },
+      waypoints,
+      optimizeWaypoints: true,
+      travelMode: maps.TravelMode.DRIVING
+    });
+    const order = directions.routes[0]?.waypoint_order ?? stops.map((_, i) => i);
+    return { orderedStops: order.map((i) => stops[i]), directions };
+  }
 
   const pool = [...stops];
   // Destination = stop farthest from the start point.

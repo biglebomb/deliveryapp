@@ -2,10 +2,27 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import DeliveryMap from '../components/DeliveryMap.vue';
 import { buildOrderSummary, formatCurrency, whatsappUrl } from '../lib/format';
+import { useBranch } from '../composables/useBranch';
 import { isMapsConfigured, optimizeRoute } from '../lib/maps';
-import { googleMapsDirectionsUrl, nearestNeighborOrder, type GeoPoint, type RouteStop } from '../lib/route';
+import {
+  farthestFirstOrder,
+  googleMapsDirectionsUrl,
+  nearestNeighborOrder,
+  type GeoPoint,
+  type RouteStop
+} from '../lib/route';
 import { fetchActiveDeliveries, updateOrderStatus, updateOrderTrackPoint } from '../services/orders';
 import type { Order, OrderStatus } from '../types/models';
+
+const branchCtx = useBranch();
+
+// Return point for the round trip — the active branch, when its coords are set.
+const branchPoint = computed<GeoPoint | null>(() => {
+  const b = branchCtx.current.value;
+  return b && b.latitude != null && b.longitude != null
+    ? { lat: Number(b.latitude), lng: Number(b.longitude) }
+    : null;
+});
 
 const orders = ref<Order[]>([]);
 const loading = ref(true);
@@ -46,13 +63,16 @@ const displayStops = computed<RouteStop[]>(() => {
   return withCoords.value;
 });
 
-const routeUrl = computed(() => googleMapsDirectionsUrl(start.value, displayStops.value));
+// End navigation at the branch so the route returns home after the last stop.
+const routeUrl = computed(() =>
+  googleMapsDirectionsUrl(start.value, branchPoint.value ? [...displayStops.value, branchPoint.value] : displayStops.value)
+);
 
 async function load() {
   loading.value = true;
   error.value = '';
   try {
-    orders.value = await fetchActiveDeliveries();
+    [orders.value] = await Promise.all([fetchActiveDeliveries(), branchCtx.loadBranches()]);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load deliveries.';
   } finally {
@@ -86,22 +106,24 @@ async function optimize() {
     notice.value = 'Need at least two located stops to optimize.';
     return;
   }
-  const origin = start.value ?? stops[0];
+  const origin = start.value ?? branchPoint.value ?? stops[0];
+  const returnTo = branchPoint.value;
+  const offline = () => (returnTo ? farthestFirstOrder(returnTo, stops) : nearestNeighborOrder(origin, stops));
   optimizing.value = true;
   notice.value = '';
   try {
     if (isMapsConfigured) {
-      const result = await optimizeRoute(origin, stops);
+      const result = await optimizeRoute(origin, stops, returnTo);
       orderedStops.value = result.orderedStops;
       directions.value = result.directions;
     } else {
-      orderedStops.value = nearestNeighborOrder(origin, stops);
+      orderedStops.value = offline();
       directions.value = null;
       notice.value = 'Using offline ordering (map key not set).';
     }
   } catch (err) {
     // Fall back to the free heuristic if the Directions call fails.
-    orderedStops.value = nearestNeighborOrder(origin, stops);
+    orderedStops.value = offline();
     directions.value = null;
     notice.value = `Route service unavailable — used offline ordering. (${err instanceof Error ? err.message : 'error'})`;
   } finally {
