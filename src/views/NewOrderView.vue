@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, toRefs, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import LocationPicker from '../components/LocationPicker.vue';
 import { useBranch } from '../composables/useBranch';
 import { formatCurrency } from '../lib/format';
-import { assignArea, resolveDeliveryFee } from '../lib/route';
+import { assignArea, parseLatLng, resolveDeliveryFee } from '../lib/route';
 import { fetchAreas } from '../services/areas';
 import { fetchCustomers, saveCustomer } from '../services/customers';
+import { isMapsLink, resolveMapsLink } from '../services/geo';
 import { createOrder } from '../services/orders';
 import { fetchPackagingOptions } from '../services/packaging';
 import { fetchProducts } from '../services/products';
 import type { Area, Customer, NewOrderItem, OrderStatus, PackagingOption, PaymentStatus, Product } from '../types/models';
 
+const route = useRoute();
 const router = useRouter();
 const branchCtx = useBranch();
+const sharedLocation = ref(false);
 const customers = ref<Customer[]>([]);
 const products = ref<Product[]>([]);
 const areas = ref<Area[]>([]);
@@ -147,10 +150,48 @@ async function load() {
     }
     // Seed the delivery fee from the branch default (area refines it once a location is set).
     if (!feeTouched.value) deliveryFee.value = defaultDeliveryFee.value;
+    // A pin shared into the app (share target or ?lat/?lng/?gmaps deep link).
+    await applySharedLocation();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load order form.';
   } finally {
     loading.value = false;
+  }
+}
+
+function qParam(value: unknown): string | null {
+  if (Array.isArray(value)) return (value[0] as string) ?? null;
+  return typeof value === 'string' ? value : null;
+}
+
+// Prefill the delivery location from a shared pin: explicit ?lat&?lng, or a
+// Maps link/text (?gmaps, or the share-target's url/text/title fields).
+async function applySharedLocation() {
+  const latRaw = qParam(route.query.lat);
+  const lngRaw = qParam(route.query.lng);
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
+  if (latRaw && lngRaw && Number.isFinite(lat) && Number.isFinite(lng)) {
+    latitude.value = Number(lat.toFixed(6));
+    longitude.value = Number(lng.toFixed(6));
+    sharedLocation.value = true;
+    return;
+  }
+
+  const text = qParam(route.query.gmaps) ?? qParam(route.query.url) ?? qParam(route.query.text) ?? qParam(route.query.title);
+  if (!text) return;
+  let point = parseLatLng(text);
+  if (!point && isMapsLink(text)) {
+    try {
+      point = await resolveMapsLink(text);
+    } catch {
+      point = null;
+    }
+  }
+  if (point) {
+    latitude.value = Number(point.lat.toFixed(6));
+    longitude.value = Number(point.lng.toFixed(6));
+    sharedLocation.value = true;
   }
 }
 
@@ -210,6 +251,9 @@ onMounted(load);
     </div>
 
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
+    <v-alert v-if="sharedLocation" type="success" variant="tonal" class="mb-4" density="compact">
+      Delivery location set from the shared pin. Pick the customer and products.
+    </v-alert>
     <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
 
     <form class="stack" @submit.prevent="submit">

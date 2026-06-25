@@ -25,6 +25,17 @@ export default defineConfig({
         orientation: 'portrait',
         start_url: '/',
         scope: '/',
+        // Android: appear in the system share sheet. Sharing a Maps link/text
+        // (e.g. from WhatsApp → Maps → Share) opens New Order with the pin set.
+        share_target: {
+          action: '/orders/new',
+          method: 'GET',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url'
+          }
+        },
         icons: [
           {
             src: '/web-app-manifest-192x192.png',
