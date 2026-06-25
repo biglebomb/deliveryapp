@@ -8,6 +8,12 @@ export async function fetchBranches(): Promise<Branch[]> {
   return (data ?? []) as Branch[];
 }
 
+export async function fetchBranch(id: string): Promise<Branch> {
+  const { data, error } = await requireSupabase().from('branches').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data as Branch;
+}
+
 export async function createBranch(input: {
   name: string;
   address?: string | null;

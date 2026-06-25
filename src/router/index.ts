@@ -20,6 +20,8 @@ export const router = createRouter({
     { path: '/reports', name: 'reports', component: () => import('../views/ReportsView.vue') },
     { path: '/drivers', name: 'drivers', component: () => import('../views/DriversView.vue') },
     { path: '/branches', name: 'branches', component: () => import('../views/BranchesView.vue'), meta: { ownerOnly: true } },
+    { path: '/branches/new', name: 'branch-new', component: () => import('../views/BranchEditView.vue'), meta: { ownerOnly: true } },
+    { path: '/branches/:id/edit', name: 'branch-edit', component: () => import('../views/BranchEditView.vue'), meta: { ownerOnly: true } },
     { path: '/driver', name: 'driver', component: () => import('../views/DriverView.vue') }
   ],
   scrollBehavior: () => ({ top: 0 })
