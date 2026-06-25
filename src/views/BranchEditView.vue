@@ -104,7 +104,7 @@ onMounted(load);
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
     <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
 
-    <form v-if="!loading" class="stack" @submit.prevent="submit">
+    <form v-if="!loading" class="stack branch-form" @submit.prevent="submit">
       <!-- Details -->
       <v-card class="list-card pa-4">
         <div class="section-title mb-3">Details</div>
@@ -145,12 +145,35 @@ onMounted(load);
         </div>
       </v-card>
 
-      <v-card class="list-card pa-4 position-sticky" style="bottom: 72px; z-index: 2">
-        <div class="d-flex ga-2 justify-end">
-          <v-btn variant="text" :disabled="saving" @click="router.push('/branches')">Cancel</v-btn>
-          <v-btn color="primary" :loading="saving" prepend-icon="mdi-content-save" type="submit">Save</v-btn>
-        </div>
-      </v-card>
+      <!-- Fixed action bar pinned to the bottom of the content area -->
+      <div class="save-bar">
+        <v-btn variant="text" :disabled="saving" @click="router.push('/branches')">Cancel</v-btn>
+        <v-btn color="primary" :loading="saving" prepend-icon="mdi-content-save" type="submit">Save</v-btn>
+      </div>
     </form>
   </main>
 </template>
+
+<style scoped>
+/* Leave room so the last card isn't hidden behind the fixed bar. */
+.branch-form {
+  padding-bottom: 84px;
+}
+
+/* Pin to the viewport, aligned to the main content area (clears the desktop
+   sidebar via --v-layout-left and the mobile bottom nav via --v-layout-bottom). */
+.save-bar {
+  position: fixed;
+  left: var(--v-layout-left, 0);
+  right: var(--v-layout-right, 0);
+  bottom: var(--v-layout-bottom, 0);
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  background: rgb(var(--v-theme-surface));
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+</style>
