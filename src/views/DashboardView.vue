@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { formatCurrency } from '../lib/format';
-import { countPendingInbox } from '../services/inbox';
 import { fetchOrders, updateOrderStatus } from '../services/orders';
 import { fetchSubscriptions, generateTodaysSubscriptionOrders } from '../services/subscriptions';
 import type { Order, OrderStatus, Subscription } from '../types/models';
@@ -12,7 +11,6 @@ const orders = ref<Order[]>([]);
 const subscriptions = ref<Subscription[]>([]);
 const loading = ref(true);
 const error = ref('');
-const pendingInbox = ref(0);
 const generatedNotice = ref('');
 
 const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' });
@@ -73,11 +71,7 @@ async function load() {
     // Auto-generate today's prepaid subscription orders (idempotent) before loading.
     const created = await generateTodaysSubscriptionOrders();
     if (created > 0) generatedNotice.value = `${created} subscription order${created > 1 ? 's' : ''} generated for today.`;
-    [orders.value, pendingInbox.value, subscriptions.value] = await Promise.all([
-      fetchOrders(true),
-      countPendingInbox(),
-      fetchSubscriptions()
-    ]);
+    [orders.value, subscriptions.value] = await Promise.all([fetchOrders(true), fetchSubscriptions()]);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load dashboard.';
   } finally {
@@ -129,25 +123,6 @@ onMounted(load);
         <div class="metric-value">{{ formatCurrency(unpaidTotal) }}</div>
       </v-card>
     </div>
-
-    <!-- Inbox pending banner -->
-    <v-card
-      v-if="pendingInbox > 0"
-      class="mb-4 pa-4 d-flex align-center justify-space-between"
-      color="warning"
-      variant="tonal"
-      style="cursor: pointer"
-      @click="router.push('/inbox')"
-    >
-      <div class="d-flex align-center ga-3">
-        <v-icon icon="mdi-inbox-arrow-down" size="24" />
-        <div>
-          <div class="font-weight-bold">{{ pendingInbox }} order{{ pendingInbox > 1 ? 's' : '' }} waiting in inbox</div>
-          <div class="text-body-2">Tap to review and confirm</div>
-        </div>
-      </div>
-      <v-icon icon="mdi-chevron-right" />
-    </v-card>
 
     <!-- Subscription low-balance nudge -->
     <v-card

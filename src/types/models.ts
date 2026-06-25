@@ -143,34 +143,6 @@ export interface Subscription {
   customer?: Customer;
 }
 
-export interface ParsedOrderItem {
-  name: string;
-  quantity: number;
-  product_id?: string | null;
-}
-
-export interface ParsedOrder {
-  customer_name: string | null;
-  phone: string | null;
-  address: string | null;
-  items: ParsedOrderItem[];
-  notes: string | null;
-}
-
-export type InboxStatus = 'pending' | 'confirmed' | 'rejected';
-
-export interface InboxItem {
-  id: string;
-  raw_text: string | null;
-  parsed: ParsedOrder | null;
-  latitude: number | null;
-  longitude: number | null;
-  sender: string | null;
-  status: InboxStatus;
-  branch_id: string;
-  created_at: string;
-}
-
 export interface AreaPoint {
   lat: number;
   lng: number;

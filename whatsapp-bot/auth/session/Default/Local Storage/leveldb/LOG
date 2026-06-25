@@ -1,0 +1,18 @@
+2026/06/22-23:36:28.017 624be6 Reusing MANIFEST /Users/irfanabyan/Documents/deliveryapp/whatsapp-bot/auth/session/Default/Local Storage/leveldb/MANIFEST-000001
+2026/06/22-23:36:28.020 624be6 Recovering log #3
+2026/06/22-23:36:28.020 624be6 Reusing old log /Users/irfanabyan/Documents/deliveryapp/whatsapp-bot/auth/session/Default/Local Storage/leveldb/000003.log 
+2026/06/23-00:25:24.868 624be9 Level-0 table #5: started
+2026/06/23-00:25:24.871 624be9 Level-0 table #5: 19853 bytes OK
+2026/06/23-00:25:24.879 624be9 Delete type=0 #3
+2026/06/23-04:14:23.825 624be9 Level-0 table #7: started
+2026/06/23-04:14:23.829 624be9 Level-0 table #7: 18200 bytes OK
+2026/06/23-04:14:23.831 624be9 Delete type=0 #4
+2026/06/23-19:12:38.340 624be9 Level-0 table #9: started
+2026/06/23-19:12:38.347 624be9 Level-0 table #9: 16538 bytes OK
+2026/06/23-19:12:38.348 624be9 Delete type=0 #6
+2026/06/24-02:08:13.939 624be9 Level-0 table #11: started
+2026/06/24-02:08:13.943 624be9 Level-0 table #11: 17586 bytes OK
+2026/06/24-02:08:13.947 624be9 Delete type=0 #8
+2026/06/24-14:34:26.811 624be9 Level-0 table #13: started
+2026/06/24-14:34:26.825 624be9 Level-0 table #13: 17546 bytes OK
+2026/06/24-14:34:26.828 624be9 Delete type=0 #10

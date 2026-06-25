@@ -5,7 +5,6 @@ import { useDisplay } from 'vuetify';
 import { useAuth } from './composables/useAuth';
 import { useBranch } from './composables/useBranch';
 import { useOnline } from './composables/useOnline';
-import { countPendingInbox } from './services/inbox';
 
 const route = useRoute();
 const router = useRouter();
@@ -16,16 +15,6 @@ const { mdAndUp } = useDisplay();
 
 // Initialize open on desktop; watch keeps it in sync when resizing.
 const drawer = ref(mdAndUp.value);
-const pendingInbox = ref(0);
-
-async function loadPending() {
-  if (!auth.isAdmin.value) return;
-  try {
-    pendingInbox.value = await countPendingInbox();
-  } catch {
-    // badge is best-effort
-  }
-}
 
 const showNav = computed(() => auth.isAdmin.value && route.name !== 'login');
 const navValue = computed(() => route.path);
@@ -34,7 +23,6 @@ const menuItems = [
   { title: 'Dashboard', value: '/', icon: 'mdi-view-dashboard-outline' },
   { title: 'New order', value: '/orders/new', icon: 'mdi-plus-circle-outline' },
   { title: 'Orders', value: '/orders', icon: 'mdi-clipboard-list-outline' },
-  { title: 'Inbox', value: '/inbox', icon: 'mdi-inbox-outline' },
   { title: 'Deliveries', value: '/deliveries', icon: 'mdi-truck-delivery-outline' },
   { title: 'Subscriptions', value: '/subscriptions', icon: 'mdi-calendar-sync-outline' },
   { title: 'Customers', value: '/customers', icon: 'mdi-account-group-outline' },
@@ -59,7 +47,6 @@ const navItems = [
 
 onMounted(async () => {
   await auth.init();
-  void loadPending();
 });
 
 // Load the branch list once the user is authenticated (for the owner's switcher
@@ -75,10 +62,6 @@ watch(
 function onBranchChange(id: string) {
   switchBranch(id);
 }
-
-watch(drawer, (open) => {
-  if (open) void loadPending();
-});
 
 // Keep drawer state in sync with breakpoint: open on desktop, closed on mobile resize.
 watch(mdAndUp, (isDesktop) => {
@@ -149,11 +132,7 @@ async function signOut() {
           :prepend-icon="item.icon"
           :title="item.title"
           @click="go(item.value)"
-        >
-          <template v-if="item.value === '/inbox' && pendingInbox > 0" #append>
-            <v-badge :content="pendingInbox" color="error" inline />
-          </template>
-        </v-list-item>
+        />
         <v-divider class="my-2" />
         <v-list-item prepend-icon="mdi-logout" title="Sign out" @click="signOut" />
       </v-list>
