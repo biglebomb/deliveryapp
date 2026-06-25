@@ -4,7 +4,7 @@ import DeliveryMap from '../components/DeliveryMap.vue';
 import { buildOrderSummary, formatCurrency, whatsappUrl } from '../lib/format';
 import { isMapsConfigured, optimizeRoute } from '../lib/maps';
 import { googleMapsDirectionsUrl, nearestNeighborOrder, type GeoPoint, type RouteStop } from '../lib/route';
-import { fetchActiveDeliveries, updateOrderStatus } from '../services/orders';
+import { fetchActiveDeliveries, updateOrderStatus, updateOrderTrackPoint } from '../services/orders';
 import type { Order, OrderStatus } from '../types/models';
 
 const orders = ref<Order[]>([]);
@@ -111,7 +111,30 @@ async function optimize() {
 
 async function setStatus(id: string, status: OrderStatus) {
   await updateOrderStatus(id, status);
+  if (status === 'delivering') void captureTrack(id, 'start');
+  if (status === 'delivered') void captureTrack(id, 'delivered');
   await load();
+}
+
+function currentPosition(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { timeout: 6000, maximumAge: 30000 }
+    );
+  });
+}
+
+async function captureTrack(id: string, kind: 'start' | 'delivered') {
+  const pos = await currentPosition();
+  if (!pos) return;
+  try {
+    await updateOrderTrackPoint(id, kind, pos.lat, pos.lng);
+  } catch {
+    // mileage falls back to the customer location
+  }
 }
 
 function navigateUrl(stop: RouteStop): string {

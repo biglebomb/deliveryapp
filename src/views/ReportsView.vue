@@ -5,8 +5,10 @@ import { useDisplay } from 'vuetify';
 import { useAuth } from '../composables/useAuth';
 import { useBranch } from '../composables/useBranch';
 import { formatCurrency, formatDateTime } from '../lib/format';
+import { estimateMileageKm, type GeoPoint } from '../lib/route';
 import { fetchOrders, reopenOrder, updatePayment } from '../services/orders';
-import type { Order, PaymentMethod } from '../types/models';
+import { fetchAllDrivers } from '../services/profiles';
+import type { Order, PaymentMethod, Profile } from '../types/models';
 import { paymentMethods } from '../types/models';
 
 const router = useRouter();
@@ -15,6 +17,7 @@ const auth = useAuth();
 const branchCtx = useBranch();
 
 const orders = ref<Order[]>([]);
+const drivers = ref<Profile[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
@@ -129,6 +132,76 @@ const productHeaders: TableHeader[] = [
   { title: 'Revenue', key: 'subtotal', align: 'end', width: '130px' }
 ];
 
+// Driver reimbursement payouts (owner). Per driver, over the filtered period:
+// km (estimated) × per_km + deliveries × per_delivery + units × per_unit +
+// revenue × pct, using their branch's configured rates.
+function driverName(id: string): string {
+  return drivers.value.find((d) => d.id === id)?.name ?? 'Driver';
+}
+
+const payoutRows = computed(() => {
+  if (!auth.isOwner.value) return [];
+  const byDriver = new Map<string, Order[]>();
+  for (const o of filtered.value) {
+    if (o.status !== 'delivered' || !o.assigned_driver_id) continue;
+    const list = byDriver.get(o.assigned_driver_id) ?? [];
+    list.push(o);
+    byDriver.set(o.assigned_driver_id, list);
+  }
+
+  const rows = [];
+  for (const [driverId, list] of byDriver) {
+    const branch = branchCtx.branches.value.find((b) => b.id === list[0].branch_id);
+    const center: GeoPoint | null =
+      branch && branch.latitude != null && branch.longitude != null
+        ? { lat: Number(branch.latitude), lng: Number(branch.longitude) }
+        : null;
+
+    const ordered = [...list].sort(
+      (a, b) =>
+        new Date(a.delivered_at ?? a.order_date).getTime() - new Date(b.delivered_at ?? b.order_date).getTime()
+    );
+    const stops = ordered
+      .map((o) => {
+        const lat = o.delivered_lat ?? o.customer?.latitude ?? o.latitude;
+        const lng = o.delivered_lng ?? o.customer?.longitude ?? o.longitude;
+        return lat != null && lng != null ? ({ lat: Number(lat), lng: Number(lng) } as GeoPoint) : null;
+      })
+      .filter((p): p is GeoPoint => p !== null);
+
+    const origin = center ?? stops[0] ?? null;
+    const km = origin && stops.length ? estimateMileageKm(origin, stops) : 0;
+    const deliveries = list.length;
+    const units = list.reduce((s, o) => s + (o.order_items?.reduce((q, i) => q + i.quantity, 0) ?? 0), 0);
+    const revenue = list.reduce((s, o) => s + Number(o.total_amount), 0);
+
+    const payout =
+      km * Number(branch?.reimburse_per_km ?? 0) +
+      deliveries * Number(branch?.reimburse_per_delivery ?? 0) +
+      units * Number(branch?.reimburse_per_unit ?? 0) +
+      (revenue * Number(branch?.reimburse_revenue_pct ?? 0)) / 100;
+
+    rows.push({
+      name: driverName(driverId),
+      branch: branch?.name ?? '—',
+      km,
+      deliveries,
+      units,
+      payout
+    });
+  }
+  return rows.sort((a, b) => b.payout - a.payout);
+});
+
+const payoutHeaders = computed((): TableHeader[] => [
+  { title: 'Driver', key: 'name' },
+  ...(branchFilter.value === 'all' ? [{ title: 'Branch', key: 'branch', width: '120px' }] : []),
+  { title: 'Km', key: 'km', align: 'end' as const, width: '90px' },
+  { title: 'Deliv.', key: 'deliveries', align: 'end' as const, width: '80px' },
+  { title: 'Units', key: 'units', align: 'end' as const, width: '80px' },
+  { title: 'Payout', key: 'payout', align: 'end' as const, width: '130px' }
+]);
+
 async function load() {
   loading.value = true;
   error.value = '';
@@ -136,7 +209,7 @@ async function load() {
     if (auth.isOwner.value) {
       // HQ: pull every branch so the owner can compare and aggregate.
       await branchCtx.loadBranches();
-      orders.value = await fetchOrders(true, null);
+      [orders.value, drivers.value] = await Promise.all([fetchOrders(true, null), fetchAllDrivers()]);
     } else {
       orders.value = await fetchOrders(true);
     }
@@ -219,6 +292,30 @@ onMounted(load);
         </template>
         <template #item.paid="{ item }">{{ formatCurrency(item.paid) }}</template>
       </v-data-table>
+    </v-card>
+
+    <!-- Driver reimbursement payouts (owner) -->
+    <v-card v-if="auth.isOwner.value && payoutRows.length" class="list-card mb-4">
+      <div class="section-title pa-4 pb-2">Driver reimbursement</div>
+      <v-data-table
+        :headers="payoutHeaders"
+        :items="payoutRows"
+        :loading="loading"
+        density="comfortable"
+        item-value="name"
+        hide-default-footer
+      >
+        <template #item.km="{ item }">{{ item.km.toFixed(1) }}</template>
+        <template #item.payout="{ item }">
+          <span class="font-weight-bold">{{ formatCurrency(item.payout) }}</span>
+        </template>
+        <template #no-data>
+          <div class="pa-4 muted text-center">No driver-assigned deliveries in this range.</div>
+        </template>
+      </v-data-table>
+      <div class="muted text-body-2 px-4 pb-3">
+        Km is estimated (branch → stops → branch, ×1.3). Set rates per branch on the Branches page.
+      </div>
     </v-card>
 
     <!-- Metrics -->

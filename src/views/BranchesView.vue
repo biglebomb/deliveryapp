@@ -16,7 +16,11 @@ const editingId = ref<string | null>(null);
 const form = reactive<{
   name: string; address: string; phone: string; delivery_fee: number;
   latitude: number | null; longitude: number | null; is_active: boolean;
-}>({ name: '', address: '', phone: '', delivery_fee: 0, latitude: null, longitude: null, is_active: true });
+  reimburse_per_km: number; reimburse_per_delivery: number; reimburse_per_unit: number; reimburse_revenue_pct: number;
+}>({
+  name: '', address: '', phone: '', delivery_fee: 0, latitude: null, longitude: null, is_active: true,
+  reimburse_per_km: 0, reimburse_per_delivery: 0, reimburse_per_unit: 0, reimburse_revenue_pct: 0
+});
 
 const headers = [
   { title: 'Branch', key: 'name' },
@@ -40,7 +44,10 @@ async function load() {
 
 function openAdd() {
   editingId.value = null;
-  Object.assign(form, { name: '', address: '', phone: '', delivery_fee: 0, latitude: null, longitude: null, is_active: true });
+  Object.assign(form, {
+    name: '', address: '', phone: '', delivery_fee: 0, latitude: null, longitude: null, is_active: true,
+    reimburse_per_km: 0, reimburse_per_delivery: 0, reimburse_per_unit: 0, reimburse_revenue_pct: 0
+  });
   error.value = '';
   dialog.value = true;
 }
@@ -54,7 +61,11 @@ function openEdit(branch: Branch) {
     delivery_fee: Number(branch.delivery_fee ?? 0),
     latitude: branch.latitude,
     longitude: branch.longitude,
-    is_active: branch.is_active
+    is_active: branch.is_active,
+    reimburse_per_km: Number(branch.reimburse_per_km ?? 0),
+    reimburse_per_delivery: Number(branch.reimburse_per_delivery ?? 0),
+    reimburse_per_unit: Number(branch.reimburse_per_unit ?? 0),
+    reimburse_revenue_pct: Number(branch.reimburse_revenue_pct ?? 0)
   });
   error.value = '';
   dialog.value = true;
@@ -77,7 +88,14 @@ async function submit() {
       longitude: form.longitude
     };
     if (editingId.value) {
-      await updateBranch(editingId.value, { ...values, is_active: form.is_active });
+      await updateBranch(editingId.value, {
+        ...values,
+        is_active: form.is_active,
+        reimburse_per_km: Number(form.reimburse_per_km || 0),
+        reimburse_per_delivery: Number(form.reimburse_per_delivery || 0),
+        reimburse_per_unit: Number(form.reimburse_per_unit || 0),
+        reimburse_revenue_pct: Number(form.reimburse_revenue_pct || 0)
+      });
     } else {
       await createBranch(values);
     }
@@ -160,7 +178,19 @@ onMounted(load);
           />
           <LocationPicker v-model:latitude="form.latitude" v-model:longitude="form.longitude" />
           <div class="muted text-body-2" style="margin-top: -8px">Map center for this branch (areas, deliveries, picking locations).</div>
-          <v-switch v-if="editingId" v-model="form.is_active" color="primary" label="Active" hide-details />
+
+          <template v-if="editingId">
+            <v-divider class="my-1" />
+            <div class="section-title">Driver reimbursement</div>
+            <div class="muted text-body-2" style="margin-top: -4px">Per period, a driver earns the sum of these. Set any to 0 to disable.</div>
+            <div class="grid cols-2">
+              <v-text-field v-model.number="form.reimburse_per_km" label="Per km" type="number" min="0" prefix="Rp" hide-details />
+              <v-text-field v-model.number="form.reimburse_per_delivery" label="Per delivery" type="number" min="0" prefix="Rp" hide-details />
+              <v-text-field v-model.number="form.reimburse_per_unit" label="Per unit sold" type="number" min="0" prefix="Rp" hide-details />
+              <v-text-field v-model.number="form.reimburse_revenue_pct" label="Of revenue" type="number" min="0" step="0.1" suffix="%" hide-details />
+            </div>
+            <v-switch v-model="form.is_active" color="primary" label="Active" hide-details />
+          </template>
         </div>
         <div class="d-flex ga-2 justify-end mt-4">
           <v-btn variant="text" :disabled="saving" @click="dialog = false">Cancel</v-btn>

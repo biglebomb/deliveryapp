@@ -12,6 +12,13 @@ export async function fetchDrivers(): Promise<Profile[]> {
   return (data ?? []) as Profile[];
 }
 
+/** All drivers across every branch (owner reports). */
+export async function fetchAllDrivers(): Promise<Profile[]> {
+  const { data, error } = await requireSupabase().from('profiles').select('*').eq('role', 'driver').order('name');
+  if (error) throw error;
+  return (data ?? []) as Profile[];
+}
+
 /** Branch managers + drivers in the active branch (the team page). */
 export async function fetchStaff(): Promise<Profile[]> {
   let query = requireSupabase()

@@ -11,6 +11,10 @@ export interface Branch {
   delivery_fee: number;
   latitude: number | null;
   longitude: number | null;
+  reimburse_per_km: number;
+  reimburse_per_delivery: number;
+  reimburse_per_unit: number;
+  reimburse_revenue_pct: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -88,8 +92,13 @@ export interface Order {
   delivery_area: string | null;
   assigned_driver_id: string | null;
   archived_at: string | null;
+  started_at: string | null;
   delivered_at: string | null;
   paid_at: string | null;
+  start_lat: number | null;
+  start_lng: number | null;
+  delivered_lat: number | null;
+  delivered_lng: number | null;
   branch_id: string;
   created_at: string;
   updated_at: string;

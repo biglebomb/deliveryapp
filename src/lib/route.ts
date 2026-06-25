@@ -101,6 +101,28 @@ export function resolveDeliveryFee(
   return Number(branchFee ?? 0);
 }
 
+/**
+ * Estimated road distance for a delivery run: origin → each stop in order →
+ * back to origin, scaled by a road factor (straight-line undercounts real roads).
+ * Used for driver mileage; good enough for reimbursement, no API cost.
+ */
+export function estimateMileageKm(
+  origin: GeoPoint,
+  stops: GeoPoint[],
+  roadFactor = 1.3,
+  returnToOrigin = true
+): number {
+  if (!stops.length) return 0;
+  let distance = 0;
+  let prev = origin;
+  for (const stop of stops) {
+    distance += haversine(prev, stop);
+    prev = stop;
+  }
+  if (returnToOrigin) distance += haversine(prev, origin);
+  return distance * roadFactor;
+}
+
 /** Total path length in km for an ordered list of stops starting from `start`. */
 export function routeDistanceKm(start: GeoPoint, ordered: GeoPoint[]): number {
   let total = 0;

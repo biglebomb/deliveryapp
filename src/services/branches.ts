@@ -21,10 +21,20 @@ export async function createBranch(input: {
   return data as Branch;
 }
 
-export async function updateBranch(
-  id: string,
-  values: Partial<Pick<Branch, 'name' | 'address' | 'phone' | 'is_active' | 'delivery_fee' | 'latitude' | 'longitude'>>
-): Promise<void> {
+type BranchEditable =
+  | 'name'
+  | 'address'
+  | 'phone'
+  | 'is_active'
+  | 'delivery_fee'
+  | 'latitude'
+  | 'longitude'
+  | 'reimburse_per_km'
+  | 'reimburse_per_delivery'
+  | 'reimburse_per_unit'
+  | 'reimburse_revenue_pct';
+
+export async function updateBranch(id: string, values: Partial<Pick<Branch, BranchEditable>>): Promise<void> {
   const { error } = await requireSupabase().from('branches').update(values).eq('id', id);
   if (error) throw error;
 }

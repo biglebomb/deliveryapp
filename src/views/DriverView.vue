@@ -7,7 +7,7 @@ import { useAuth } from '../composables/useAuth';
 import { buildOrderSummary, formatCurrency, whatsappUrl } from '../lib/format';
 import { isMapsConfigured, optimizeRoute } from '../lib/maps';
 import { googleMapsDirectionsUrl, haversine, nearestNeighborOrder, type RouteStop } from '../lib/route';
-import { fetchMyDeliveries, updateOrderStatus, updatePayment } from '../services/orders';
+import { fetchMyDeliveries, updateOrderStatus, updateOrderTrackPoint, updatePayment } from '../services/orders';
 import type { Order, OrderStatus, PaymentMethod } from '../types/models';
 import { paymentMethods } from '../types/models';
 
@@ -160,6 +160,24 @@ async function setStatus(id: string, status: OrderStatus) {
   if (order) {
     order.status = status;
     if (status === 'delivered') order.delivered_at = new Date().toISOString();
+  }
+  // Best-effort GPS stamp for mileage; never blocks the status change.
+  if (status === 'delivering') void captureTrack(id, 'start');
+  if (status === 'delivered') void captureTrack(id, 'delivered');
+}
+
+async function captureTrack(id: string, kind: 'start' | 'delivered') {
+  const pos = await currentPosition();
+  if (!pos) return;
+  try {
+    await updateOrderTrackPoint(id, kind, pos.lat, pos.lng);
+    const order = ordersById.value.get(id);
+    if (order) {
+      if (kind === 'start') { order.start_lat = pos.lat; order.start_lng = pos.lng; }
+      else { order.delivered_lat = pos.lat; order.delivered_lng = pos.lng; }
+    }
+  } catch {
+    // mileage will fall back to the customer location
   }
 }
 

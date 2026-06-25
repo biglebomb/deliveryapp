@@ -130,8 +130,26 @@ export async function createOrder(input: {
 export async function updateOrderStatus(id: string, status: OrderStatus): Promise<void> {
   // Stamp the delivery moment so reports/dashboard can attribute revenue to the
   // day it was actually delivered; clear it if the order moves back out of delivered.
-  const delivered_at = status === 'delivered' ? new Date().toISOString() : null;
-  const { error } = await requireSupabase().from('orders').update({ status, delivered_at }).eq('id', id);
+  const patch: Record<string, unknown> = {
+    status,
+    delivered_at: status === 'delivered' ? new Date().toISOString() : null
+  };
+  // Stamp when the driver set off for this stop (for mileage timing).
+  if (status === 'delivering') patch.started_at = new Date().toISOString();
+  const { error } = await requireSupabase().from('orders').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+/** Best-effort GPS stamp for the start or finish of a stop (mileage / proof). */
+export async function updateOrderTrackPoint(
+  id: string,
+  kind: 'start' | 'delivered',
+  lat: number,
+  lng: number
+): Promise<void> {
+  const patch =
+    kind === 'start' ? { start_lat: lat, start_lng: lng } : { delivered_lat: lat, delivered_lng: lng };
+  const { error } = await requireSupabase().from('orders').update(patch).eq('id', id);
   if (error) throw error;
 }
 
