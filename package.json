@@ -7,7 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "vue-tsc -b"
+    "typecheck": "vue-tsc -b",
+    "test:isolation": "eval \"$(supabase status -o env | sed 's/^/export /')\" && SUPABASE_URL=\"$API_URL\" SUPABASE_ANON_KEY=\"$ANON_KEY\" SUPABASE_SERVICE_ROLE_KEY=\"$SERVICE_ROLE_KEY\" node tests/rls-isolation.test.mjs"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.1",
