@@ -12,6 +12,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// supabase-js eagerly builds a realtime client that needs WebSocket; Node < 22
+// has none, so polyfill from `ws`.
+if (!globalThis.WebSocket) {
+  globalThis.WebSocket = (await import('ws')).default;
+}
+
 const URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANON = process.env.SUPABASE_ANON_KEY;
