@@ -3,6 +3,12 @@ export type PaymentStatus = 'unpaid' | 'paid';
 export type PaymentMethod = 'cash' | 'qris' | 'transfer' | 'other';
 export type UserRole = 'owner' | 'admin' | 'driver';
 
+export interface Organization {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface Branch {
   id: string;
   name: string;
