@@ -375,9 +375,18 @@ onMounted(load);
           <!-- Delivery days -->
           <div>
             <div class="section-title mb-2">Delivery days</div>
-            <v-btn-toggle v-model="form.weekdays" multiple divided color="primary" density="comfortable">
-              <v-btn v-for="(label, d) in weekdayLabels" :key="d" :value="d" size="small">{{ label }}</v-btn>
-            </v-btn-toggle>
+            <div class="d-flex flex-wrap ga-x-4">
+              <v-checkbox
+                v-for="(label, d) in weekdayLabels"
+                :key="d"
+                v-model="form.weekdays"
+                :value="d"
+                :label="label"
+                color="primary"
+                density="compact"
+                hide-details
+              />
+            </div>
           </div>
 
           <!-- Prepaid plan -->

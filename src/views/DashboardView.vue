@@ -25,19 +25,23 @@ function isToday(timestamp: string | null): boolean {
 const deliveredToday = computed(() => orders.value.filter((o) => isToday(o.delivered_at)));
 const todaySales = computed(() => deliveredToday.value.reduce((s, o) => s + Number(o.total_amount), 0));
 
-// The active queue: orders still to be delivered, regardless of when created.
-const toDeliver = computed(() =>
-  orders.value.filter((o) => ['pending', 'preparing', 'delivering'].includes(o.status))
-);
+// Orders out for delivery right now. Pending/preparing aren't part of the
+// dashboard's delivery picture — they live in Orders until dispatched.
+const toDeliver = computed(() => orders.value.filter((o) => o.status === 'delivering'));
 
-// Dashboard list = today's operational picture: still-to-deliver plus delivered today.
+// Dashboard list = today's delivery picture: orders out for delivery plus those
+// delivered today. Pending/preparing aren't shown here — they live in Orders.
 const todayOrders = computed(() => {
   const rank = (o: Order) => (o.status === 'delivered' ? 1 : 0);
   return [...toDeliver.value, ...deliveredToday.value].sort((a, b) => rank(a) - rank(b));
 });
 
+// Unpaid money among orders in the delivery picture (out for delivery or
+// delivered) — pending/preparing aren't owed yet.
 const unpaidTotal = computed(() =>
-  orders.value.filter((o) => o.payment_status === 'unpaid').reduce((s, o) => s + Number(o.total_amount), 0)
+  orders.value
+    .filter((o) => o.payment_status === 'unpaid' && ['delivering', 'delivered'].includes(o.status))
+    .reduce((s, o) => s + Number(o.total_amount), 0)
 );
 
 // Active subscriptions down to their last few prepaid deliveries — nudge to renew.
