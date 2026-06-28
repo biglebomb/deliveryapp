@@ -31,7 +31,8 @@ const menuItems = [
   { title: 'Areas', value: '/areas', icon: 'mdi-vector-polygon' },
   { title: 'Team', value: '/drivers', icon: 'mdi-account-hard-hat' },
   { title: 'Branches', value: '/branches', icon: 'mdi-store-outline', ownerOnly: true },
-  { title: 'Reports', value: '/reports', icon: 'mdi-chart-bar' }
+  { title: 'Reports', value: '/reports', icon: 'mdi-chart-bar' },
+  { title: 'Import / Export', value: '/data', icon: 'mdi-database-arrow-up-outline' }
 ];
 
 // Branches management is HQ-only; everything else is shared with branch managers.

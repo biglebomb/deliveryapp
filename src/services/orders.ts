@@ -65,6 +65,64 @@ export async function fetchMyDeliveries(driverId: string): Promise<Order[]> {
   return (data ?? []) as Order[];
 }
 
+/**
+ * Create a backdated, already-completed order (CSV history import). It's stamped
+ * delivered + archived with order_date/delivered_at/paid_at on the given date, so
+ * it lands in Reports/history without entering the active queue.
+ */
+export async function createHistoricalOrder(input: {
+  customer: Customer;
+  items: NewOrderItem[];
+  date: string; // YYYY-MM-DD (delivery date)
+  paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod | null;
+  deliveryFee?: number;
+  deliveryNotes?: string | null;
+}): Promise<void> {
+  const client = requireSupabase();
+  const lineTotal = (item: NewOrderItem) =>
+    (Number(item.product.price) + Number(item.packaging?.price ?? 0)) * item.quantity;
+  const deliveryFee = Number(input.deliveryFee ?? 0);
+  const totalAmount = input.items.reduce((total, item) => total + lineTotal(item), 0) + deliveryFee;
+  // Noon Jakarta avoids any date drift across timezones.
+  const at = new Date(`${input.date}T12:00:00+07:00`).toISOString();
+  const now = new Date().toISOString();
+
+  const { data: order, error: orderError } = await client
+    .from('orders')
+    .insert({
+      customer_id: input.customer.id,
+      order_date: at,
+      status: 'delivered',
+      total_amount: totalAmount,
+      payment_status: input.paymentStatus,
+      payment_method: input.paymentMethod ?? null,
+      paid_at: input.paymentStatus === 'paid' ? at : null,
+      delivered_at: at,
+      archived_at: now,
+      delivery_notes: input.deliveryNotes ?? null,
+      delivery_fee: deliveryFee,
+      branch_id: requireBranchId()
+    })
+    .select('id')
+    .single();
+  if (orderError) throw orderError;
+
+  const itemRows = input.items.map((item) => ({
+    order_id: order.id,
+    product_id: item.product.id,
+    product_name_snapshot: item.product.name,
+    unit_price_snapshot: item.product.price,
+    quantity: item.quantity,
+    subtotal: lineTotal(item),
+    packaging_id: item.packaging?.id ?? null,
+    packaging_name_snapshot: item.packaging?.name ?? null,
+    packaging_fee_snapshot: Number(item.packaging?.price ?? 0)
+  }));
+  const { error: itemError } = await client.from('order_items').insert(itemRows);
+  if (itemError) throw itemError;
+}
+
 export async function createOrder(input: {
   customer: Customer;
   items: NewOrderItem[];

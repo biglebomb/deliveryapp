@@ -17,6 +17,7 @@ export const router = createRouter({
     { path: '/packaging', name: 'packaging', component: () => import('../views/PackagingView.vue') },
     { path: '/areas', name: 'areas', component: () => import('../views/AreasView.vue') },
     { path: '/reports', name: 'reports', component: () => import('../views/ReportsView.vue') },
+    { path: '/data', name: 'data', component: () => import('../views/DataView.vue') },
     { path: '/drivers', name: 'drivers', component: () => import('../views/DriversView.vue') },
     { path: '/branches', name: 'branches', component: () => import('../views/BranchesView.vue'), meta: { ownerOnly: true } },
     { path: '/branches/new', name: 'branch-new', component: () => import('../views/BranchEditView.vue'), meta: { ownerOnly: true } },
