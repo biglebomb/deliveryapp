@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import DeliveryMap from '../components/DeliveryMap.vue';
 import { buildOrderSummary, formatCurrency, whatsappUrl } from '../lib/format';
+import draggable from 'vuedraggable';
 import { useBranch } from '../composables/useBranch';
 import { isMapsConfigured, optimizeRoute } from '../lib/maps';
 import {
@@ -67,6 +68,16 @@ const displayStops = computed<RouteStop[]>(() => {
 const routeUrl = computed(() =>
   googleMapsDirectionsUrl(start.value, branchPoint.value ? [...displayStops.value, branchPoint.value] : displayStops.value)
 );
+
+// Drag-to-reorder: writing the new order drops the optimized polyline (it no
+// longer matches) but keeps the renumbered pins, map, and Maps link in sync.
+const routeStops = computed<RouteStop[]>({
+  get: () => displayStops.value,
+  set: (next) => {
+    orderedStops.value = next;
+    directions.value = null;
+  }
+});
 
 async function load() {
   loading.value = true;
@@ -246,9 +257,11 @@ onMounted(load);
 
       <div v-if="notice" class="muted text-body-2">{{ notice }}</div>
 
-      <div v-if="displayStops.length" class="stack">
-        <v-card v-for="(stop, index) in displayStops" :key="stop.id" class="list-card pa-4">
+      <draggable v-if="displayStops.length" v-model="routeStops" item-key="id" handle=".drag-handle" class="stack">
+        <template #item="{ element: stop, index }">
+        <v-card class="list-card pa-4">
           <div class="d-flex align-center ga-3">
+            <v-icon class="drag-handle" icon="mdi-drag-vertical" color="grey" style="cursor: grab; touch-action: none" />
             <v-avatar color="primary" size="32"><span class="font-weight-bold">{{ index + 1 }}</span></v-avatar>
             <div class="flex-grow-1">
               <div class="section-title">{{ stop.label }}</div>
@@ -280,7 +293,8 @@ onMounted(load);
             </v-btn>
           </div>
         </v-card>
-      </div>
+        </template>
+      </draggable>
 
       <v-card v-else class="list-card pa-6 text-center">
         <v-icon icon="mdi-truck-check-outline" size="36" class="mb-2 muted" />

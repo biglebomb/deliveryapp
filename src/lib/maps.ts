@@ -68,7 +68,9 @@ export async function optimizeRoute(
       destination: { lat: returnTo.lat, lng: returnTo.lng },
       waypoints,
       optimizeWaypoints: true,
-      travelMode: maps.TravelMode.DRIVING
+      travelMode: maps.TravelMode.DRIVING,
+      // Motorbikes can't use Indonesian toll roads — keep the route on roads they can ride.
+      avoidTolls: true
     });
     const order = directions.routes[0]?.waypoint_order ?? stops.map((_, i) => i);
     return { orderedStops: order.map((i) => stops[i]), directions };
@@ -97,7 +99,8 @@ export async function optimizeRoute(
     destination: { lat: destination.lat, lng: destination.lng },
     waypoints,
     optimizeWaypoints: true,
-    travelMode: maps.TravelMode.DRIVING
+    travelMode: maps.TravelMode.DRIVING,
+    avoidTolls: true
   });
 
   const order = directions.routes[0]?.waypoint_order ?? pool.map((_, i) => i);

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import draggable from 'vuedraggable';
 import DeliveryMap from '../components/DeliveryMap.vue';
 import SwipeToComplete from '../components/SwipeToComplete.vue';
 import { useAuth } from '../composables/useAuth';
@@ -89,6 +90,16 @@ const displayStops = computed<RouteStop[]>(() => {
 const routeUrl = computed(() =>
   googleMapsDirectionsUrl(null, branchPoint.value ? [...displayStops.value, branchPoint.value] : displayStops.value)
 );
+
+// Drag-to-reorder the run; manual order drops the optimized polyline but keeps
+// the renumbered pins, map, and Maps link consistent.
+const routeStops = computed<RouteStop[]>({
+  get: () => displayStops.value,
+  set: (next) => {
+    orderedStops.value = next;
+    directions.value = null;
+  }
+});
 
 /** Indonesian greeting word for the current Jakarta time of day. */
 function timeOfDay(): string {
@@ -283,10 +294,9 @@ onMounted(load);
 
       <div v-if="notice" class="muted text-body-2">{{ notice }}</div>
 
-      <div v-if="displayStops.length" class="stack">
+      <draggable v-if="displayStops.length" v-model="routeStops" item-key="id" handle=".drag-handle" class="stack">
+        <template #item="{ element: stop, index }">
         <SwipeToComplete
-          v-for="(stop, index) in displayStops"
-          :key="stop.id"
           :disabled="ordersById.get(stop.id)?.payment_status !== 'paid'"
           label="Selesai"
           locked-label="Lunasi dulu"
@@ -295,6 +305,7 @@ onMounted(load);
         >
           <v-card class="list-card pa-4">
             <div class="d-flex align-center ga-3">
+              <v-icon class="drag-handle" data-no-swipe icon="mdi-drag-vertical" color="grey" style="cursor: grab; touch-action: none" />
               <v-avatar color="primary" size="32"><span class="font-weight-bold">{{ index + 1 }}</span></v-avatar>
               <div class="flex-grow-1">
                 <div class="section-title">{{ stop.label }}</div>
@@ -373,7 +384,8 @@ onMounted(load);
             </div>
           </v-card>
         </SwipeToComplete>
-      </div>
+        </template>
+      </draggable>
 
       <!-- Completed today: visible but de-emphasized and unactionable -->
       <div v-if="doneOrders.length" class="stack">
