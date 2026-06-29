@@ -21,6 +21,7 @@ const emit = defineEmits<{
   payment: [id: string, status: PaymentStatus, method: PaymentMethod | null];
   assign: [id: string, driverId: string | null];
   location: [id: string, lat: number, lng: number];
+  delete: [id: string];
 }>();
 
 const showLocation = ref(false);
@@ -212,6 +213,8 @@ function staticMapUrl(lat: number, lng: number): string {
       </v-btn>
       <v-btn variant="text" prepend-icon="mdi-content-copy" @click="copySummary">Copy</v-btn>
       <v-btn v-if="editable" variant="text" prepend-icon="mdi-pencil" @click="router.push(`/orders/${order.id}/edit`)">Edit</v-btn>
+      <v-spacer />
+      <v-btn v-if="editable" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="emit('delete', order.id)">Delete</v-btn>
     </div>
 
     <v-dialog v-model="showLocation" max-width="520">

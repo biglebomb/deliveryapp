@@ -6,10 +6,11 @@ import { useBranch } from '../composables/useBranch';
 import { formatCurrency } from '../lib/format';
 import { assignArea, resolveDeliveryFee } from '../lib/route';
 import { fetchAreas } from '../services/areas';
+import { fetchCustomers } from '../services/customers';
 import { fetchOrderById, updateOrder } from '../services/orders';
 import { fetchPackagingOptions } from '../services/packaging';
 import { fetchProducts } from '../services/products';
-import type { Area, NewOrderItem, Order, PackagingOption, Product } from '../types/models';
+import type { Area, Customer, NewOrderItem, Order, PackagingOption, Product } from '../types/models';
 
 const route = useRoute();
 const router = useRouter();
@@ -17,6 +18,8 @@ const branchCtx = useBranch();
 const orderId = route.params.id as string;
 
 const order = ref<Order | null>(null);
+const customers = ref<Customer[]>([]);
+const selectedCustomerId = ref<string | null>(null);
 const products = ref<Product[]>([]);
 const areas = ref<Area[]>([]);
 const packagingOptions = ref<PackagingOption[]>([]);
@@ -110,14 +113,17 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const [orderData, productRows, areaRows, packagingRows] = await Promise.all([
+    const [orderData, customerRows, productRows, areaRows, packagingRows] = await Promise.all([
       fetchOrderById(orderId),
+      fetchCustomers(),
       fetchProducts(false),
       fetchAreas(),
       fetchPackagingOptions(false),
       branchCtx.loadBranches()
     ]);
     order.value = orderData;
+    customers.value = customerRows;
+    selectedCustomerId.value = orderData.customer_id;
     products.value = productRows;
     areas.value = areaRows;
     packagingOptions.value = packagingRows;
@@ -153,6 +159,7 @@ async function submit() {
       items: selectedItems.value,
       deliveryNotes: deliveryNotes.value.trim() || null,
       deliveryFee: Number(deliveryFee.value || 0),
+      customerId: selectedCustomerId.value ?? undefined,
       latitude: latitude.value,
       longitude: longitude.value,
       deliveryArea: assignedArea.value
@@ -182,6 +189,20 @@ onMounted(load);
     <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
 
     <form v-if="order" class="stack" @submit.prevent="submit">
+      <!-- Customer -->
+      <v-card class="list-card pa-4">
+        <div class="section-title mb-3">Customer</div>
+        <v-autocomplete
+          v-model="selectedCustomerId"
+          :items="customers"
+          item-title="name"
+          item-value="id"
+          label="Customer"
+          prepend-inner-icon="mdi-account-search"
+          hide-details
+        />
+      </v-card>
+
       <!-- Products -->
       <v-card class="list-card pa-4">
         <div class="section-title mb-3">Products</div>

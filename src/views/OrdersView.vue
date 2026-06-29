@@ -8,6 +8,7 @@ import { fetchAreas } from '../services/areas';
 import {
   archiveDeliveredOrders,
   assignDriver,
+  deleteOrder,
   fetchOrders,
   updateOrderLocation,
   updateOrderStatus,
@@ -97,6 +98,24 @@ async function setLocation(id: string, lat: number, lng: number) {
   const area = assignArea({ lat, lng }, areas.value);
   await updateOrderLocation(id, lat, lng, area);
   await load();
+}
+
+const orderToDelete = ref<Order | null>(null);
+const deleting = ref(false);
+
+async function confirmDeleteOrder() {
+  if (!orderToDelete.value) return;
+  deleting.value = true;
+  error.value = '';
+  try {
+    await deleteOrder(orderToDelete.value.id);
+    orderToDelete.value = null;
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not delete order.';
+  } finally {
+    deleting.value = false;
+  }
 }
 
 async function clearDelivered() {
@@ -201,6 +220,7 @@ onMounted(load);
                 @payment="setPayment"
                 @assign="setDriver"
                 @location="setLocation"
+                @delete="orderToDelete = item"
               />
             </td>
           </tr>
@@ -211,6 +231,21 @@ onMounted(load);
         </template>
       </v-data-table>
     </v-card>
+
+    <v-dialog :model-value="orderToDelete !== null" max-width="420" @update:model-value="orderToDelete = null">
+      <v-card class="pa-4">
+        <div class="section-title mb-2">Delete order?</div>
+        <div class="muted text-body-2 mb-4">
+          Permanently delete this order for <strong>{{ orderToDelete?.customer?.name ?? 'customer' }}</strong>
+          ({{ formatCurrency(orderToDelete?.total_amount ?? 0) }}) and its items. This can't be undone — to keep
+          history but exclude it from sales, set its status to <em>cancelled</em> instead.
+        </div>
+        <div class="d-flex ga-2 justify-end">
+          <v-btn variant="text" :disabled="deleting" @click="orderToDelete = null">Cancel</v-btn>
+          <v-btn color="error" :loading="deleting" prepend-icon="mdi-delete" @click="confirmDeleteOrder">Delete</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="confirmClear" max-width="420">
       <v-card class="pa-4">

@@ -65,7 +65,8 @@ const filtered = computed(() =>
     const key = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date(o.order_date));
     const inRange = key >= from.value && key <= to.value;
     const inBranch = branchFilter.value === 'all' || o.branch_id === branchFilter.value;
-    return inRange && inBranch;
+    // Cancelled = voided; excluded from all report money.
+    return inRange && inBranch && o.status !== 'cancelled';
   })
 );
 

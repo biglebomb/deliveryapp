@@ -211,6 +211,12 @@ export async function updateOrderTrackPoint(
   if (error) throw error;
 }
 
+/** Permanently delete an order (its order_items cascade via the FK). */
+export async function deleteOrder(id: string): Promise<void> {
+  const { error } = await requireSupabase().from('orders').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /** Archive every delivered, not-yet-archived order in the active branch. Returns how many were cleared. */
 export async function archiveDeliveredOrders(): Promise<number> {
   let query = requireSupabase()
@@ -261,6 +267,7 @@ export async function updateOrder(
     items: NewOrderItem[];
     deliveryNotes: string | null;
     deliveryFee?: number;
+    customerId?: string;
     latitude?: number | null;
     longitude?: number | null;
     deliveryArea?: string | null;
@@ -276,6 +283,7 @@ export async function updateOrder(
     total_amount: totalAmount,
     delivery_notes: input.deliveryNotes,
     delivery_fee: deliveryFee,
+    ...(input.customerId ? { customer_id: input.customerId } : {}),
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,
     delivery_area: input.deliveryArea ?? null
